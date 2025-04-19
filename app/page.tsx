@@ -1,8 +1,15 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import Link from "next/link"
-import { MapPin } from "lucide-react"
-import Header from "@/components/Header"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import Link from "next/link";
+import { MapPin } from "lucide-react";
+import Header from "@/components/Header";
 
 export default function Home() {
   return (
@@ -12,39 +19,47 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center text-center">
           <div className="mb-8 flex items-center gap-2">
             <MapPin className="h-10 w-10 text-[#CF142B]" />
-            <h1 className="text-4xl font-bold dark:text-white light:text-[#00205B]">Toronto GeoGuessr</h1>
+            <h1 className="text-4xl font-bold dark:text-white light:text-[#00205B]">
+              Toronto GeoGuessr
+            </h1>
           </div>
 
           <p className="mb-8 max-w-2xl text-lg dark:text-white light:text-gray-700">
-            Test your knowledge of Toronto! View street scenes with blurred signs and guess the location. How well do
-            you know the 6ix?
+            Test your knowledge of Toronto! View street scenes with blurred
+            signs and guess the location. How well do you know the 6ix?
           </p>
 
           <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
             <Card className="bg-white/10 backdrop-blur-sm border-white/20 dark:bg-white/10 dark:border-white/20 light:bg-[#00205B] light:border-[#001233] light:border-2 light:shadow-lg light:shadow-blue-900/20">
               <CardHeader>
-                <CardTitle className="text-white dark:text-white light:text-white">Play Game</CardTitle>
+                <CardTitle className="text-white dark:text-white light:text-white">
+                  Play Game
+                </CardTitle>
                 <CardDescription className="text-gray-300 dark:text-gray-300 light:text-blue-200">
                   Start a new game with 5 rounds
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <img
-                  src="/placeholder.svg?height=200&width=400"
+                  src="/TorontoGuessrThumbnail.webp?height=200&width=400"
                   alt="Toronto skyline"
                   className="rounded-md w-full h-48 object-cover"
                 />
               </CardContent>
               <CardFooter>
                 <Link href="/game" className="w-full">
-                  <Button className="w-full bg-[#CF142B] hover:bg-[#B01226]">Start Game</Button>
+                  <Button className="w-full bg-[#CF142B] hover:bg-[#B01226]">
+                    Start Game
+                  </Button>
                 </Link>
               </CardFooter>
             </Card>
 
             <Card className="bg-white/10 backdrop-blur-sm border-white/20 dark:bg-white/10 dark:border-white/20 light:bg-[#00205B] light:border-[#001233] light:border-2 light:shadow-lg light:shadow-blue-900/20">
               <CardHeader>
-                <CardTitle className="text-white dark:text-white light:text-white">How to Play</CardTitle>
+                <CardTitle className="text-white dark:text-white light:text-white">
+                  How to Play
+                </CardTitle>
                 <CardDescription className="text-gray-300 dark:text-gray-300 light:text-blue-200">
                   Game rules and scoring
                 </CardDescription>
@@ -73,5 +88,5 @@ export default function Home() {
         </div>
       </div>
     </main>
-  )
+  );
 }

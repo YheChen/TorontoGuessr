@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { GameMap } from "@/components/game-map";
-import { GameImage } from "@/components/game-image";
 import { GameControls } from "@/components/game-controls";
 import { GameProgress } from "@/components/game-progress";
 import { GameResults } from "@/components/game-results";
@@ -12,45 +11,14 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Header from "@/components/Header";
-import { generateStreetViewURL } from "@/lib/streetview";
+import GamePanorama from "@/components/gamepanorama";
 
-// This would come from your database or API in a real implementation
 const SAMPLE_LOCATIONS = [
-  {
-    id: 1,
-    lat: 43.6532,
-    lng: -79.3832,
-    imageUrl: "/placeholder.svg?height=600&width=800",
-    name: "Downtown Toronto",
-  },
-  {
-    id: 2,
-    lat: 43.6547,
-    lng: -79.3585,
-    imageUrl: "/placeholder.svg?height=600&width=800",
-    name: "Distillery District",
-  },
-  {
-    id: 3,
-    lat: 43.6426,
-    lng: -79.3871,
-    imageUrl: "/placeholder.svg?height=600&width=800",
-    name: "Harbourfront",
-  },
-  {
-    id: 4,
-    lat: 43.6689,
-    lng: -79.3954,
-    imageUrl: "/placeholder.svg?height=600&width=800",
-    name: "Kensington Market",
-  },
-  {
-    id: 5,
-    lat: 43.6771,
-    lng: -79.3853,
-    imageUrl: "/placeholder.svg?height=600&width=800",
-    name: "Yorkville",
-  },
+  { id: 1, lat: 43.6532, lng: -79.3832, name: "Downtown Toronto" },
+  { id: 2, lat: 43.6547, lng: -79.3585, name: "Distillery District" },
+  { id: 3, lat: 43.6426, lng: -79.3871, name: "Harbourfront" },
+  { id: 4, lat: 43.6689, lng: -79.3954, name: "Kensington Market" },
+  { id: 5, lat: 43.6771, lng: -79.3853, name: "Yorkville" },
 ];
 
 export default function Game() {
@@ -68,7 +36,7 @@ export default function Game() {
   const [scores, setScores] = useState<
     Array<{ score: number; distance: number; location: typeof currentLocation }>
   >([]);
-  const [timeRemaining, setTimeRemaining] = useState(60); // 60 seconds per round
+  const [timeRemaining, setTimeRemaining] = useState(60);
 
   useEffect(() => {
     if (gameState === "guessing" && timeRemaining > 0) {
@@ -82,16 +50,7 @@ export default function Game() {
   useEffect(() => {
     if (currentRound <= totalRounds) {
       const location = SAMPLE_LOCATIONS[currentRound - 1];
-      const heading = Math.floor(Math.random() * 360);
-      const pitch = Math.floor(Math.random() * 30) - 15;
-      const imageUrl = generateStreetViewURL(
-        location.lat,
-        location.lng,
-        heading,
-        pitch
-      );
-
-      setCurrentLocation({ ...location, imageUrl });
+      setCurrentLocation(location);
       setTimeRemaining(60);
     }
   }, [currentRound]);
@@ -104,7 +63,6 @@ export default function Game() {
 
   const handleSubmitGuess = () => {
     if (!guessLocation && gameState === "guessing") {
-      // If time ran out and no guess was made, use a default location (center of Toronto)
       setGuessLocation({ lat: 43.6532, lng: -79.3832 });
     }
 
@@ -117,15 +75,7 @@ export default function Game() {
       );
       const score = calculateScore(distance);
 
-      setScores([
-        ...scores,
-        {
-          score,
-          distance,
-          location: currentLocation,
-        },
-      ]);
-
+      setScores([...scores, { score, distance, location: currentLocation }]);
       setGameState("results");
     }
   };
@@ -173,7 +123,10 @@ export default function Game() {
         {gameState === "guessing" && (
           <div className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
-              <GameImage imageUrl={currentLocation.imageUrl} />
+              <GamePanorama
+                lat={currentLocation.lat}
+                lng={currentLocation.lng}
+              />
             </div>
             <div className="space-y-4">
               <GameMap
