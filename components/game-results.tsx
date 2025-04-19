@@ -13,7 +13,7 @@ import { MapPin, Navigation, ArrowRight } from "lucide-react";
 
 interface GameResultsProps {
   guessLocation: { lat: number; lng: number };
-  actualLocation: { lat: number; lng: number; name: string };
+  actualLocation: { lat: number; lng: number };
   score: number;
   distance: number;
   onNextRound: () => void;
@@ -36,9 +36,9 @@ export function GameResults({
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="text-lg font-semibold">{actualLocation.name}</h3>
+            <h3 className="text-lg font-semibold"></h3>
             <p className="text-gray-600 dark:text-gray-400 light:text-gray-600">
-              The location was in {actualLocation.name}
+              The location was in
             </p>
           </div>
 

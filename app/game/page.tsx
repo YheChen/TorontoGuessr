@@ -6,6 +6,7 @@ import { GameControls } from "@/components/game-controls";
 import { GameProgress } from "@/components/game-progress";
 import { GameResults } from "@/components/game-results";
 import { calculateScore, calculateDistance } from "@/lib/game-utils";
+import { getVerifiedLocations } from "@/lib/location-generator";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -13,19 +14,17 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import GamePanorama from "@/components/gamepanorama";
 
-const SAMPLE_LOCATIONS = [
-  { id: 1, lat: 43.6532, lng: -79.3832, name: "Downtown Toronto" },
-  { id: 2, lat: 43.6547, lng: -79.3585, name: "Distillery District" },
-  { id: 3, lat: 43.6426, lng: -79.3871, name: "Harbourfront" },
-  { id: 4, lat: 43.6689, lng: -79.3954, name: "Kensington Market" },
-  { id: 5, lat: 43.6771, lng: -79.3853, name: "Yorkville" },
-];
-
 export default function Game() {
   const router = useRouter();
+  const [locations, setLocations] = useState<{ lat: number; lng: number }[]>(
+    []
+  );
   const [currentRound, setCurrentRound] = useState(1);
   const [totalRounds] = useState(5);
-  const [currentLocation, setCurrentLocation] = useState(SAMPLE_LOCATIONS[0]);
+  const [currentLocation, setCurrentLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [guessLocation, setGuessLocation] = useState<{
     lat: number;
     lng: number;
@@ -34,9 +33,24 @@ export default function Game() {
     "guessing" | "results" | "summary"
   >("guessing");
   const [scores, setScores] = useState<
-    Array<{ score: number; distance: number; location: typeof currentLocation }>
+    Array<{
+      score: number;
+      distance: number;
+      location: { lat: number; lng: number };
+    }>
   >([]);
   const [timeRemaining, setTimeRemaining] = useState(60);
+
+  useEffect(() => {
+    getVerifiedLocations(5).then(setLocations);
+  }, []);
+
+  useEffect(() => {
+    if (locations.length && currentRound <= totalRounds) {
+      setCurrentLocation(locations[currentRound - 1]);
+      setTimeRemaining(60);
+    }
+  }, [currentRound, locations]);
 
   useEffect(() => {
     if (gameState === "guessing" && timeRemaining > 0) {
@@ -46,14 +60,6 @@ export default function Game() {
       handleSubmitGuess();
     }
   }, [timeRemaining, gameState]);
-
-  useEffect(() => {
-    if (currentRound <= totalRounds) {
-      const location = SAMPLE_LOCATIONS[currentRound - 1];
-      setCurrentLocation(location);
-      setTimeRemaining(60);
-    }
-  }, [currentRound]);
 
   const handleMapClick = (lat: number, lng: number) => {
     if (gameState === "guessing") {
@@ -66,7 +72,7 @@ export default function Game() {
       setGuessLocation({ lat: 43.6532, lng: -79.3832 });
     }
 
-    if (guessLocation) {
+    if (guessLocation && currentLocation) {
       const distance = calculateDistance(
         guessLocation.lat,
         guessLocation.lng,
@@ -96,6 +102,7 @@ export default function Game() {
     setGuessLocation(null);
     setGameState("guessing");
     setTimeRemaining(60);
+    getVerifiedLocations(5).then(setLocations);
   };
 
   const totalScore = scores.reduce((sum, round) => sum + round.score, 0);
@@ -120,7 +127,7 @@ export default function Game() {
           </div>
         </div>
 
-        {gameState === "guessing" && (
+        {gameState === "guessing" && currentLocation && (
           <div className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
               <GamePanorama
@@ -144,16 +151,18 @@ export default function Game() {
           </div>
         )}
 
-        {gameState === "results" && currentRound <= totalRounds && (
-          <GameResults
-            guessLocation={guessLocation!}
-            actualLocation={currentLocation}
-            score={scores[scores.length - 1].score}
-            distance={scores[scores.length - 1].distance}
-            onNextRound={handleNextRound}
-            isLastRound={currentRound === totalRounds}
-          />
-        )}
+        {gameState === "results" &&
+          currentLocation &&
+          currentRound <= totalRounds && (
+            <GameResults
+              guessLocation={guessLocation!}
+              actualLocation={currentLocation}
+              score={scores[scores.length - 1].score}
+              distance={scores[scores.length - 1].distance}
+              onNextRound={handleNextRound}
+              isLastRound={currentRound === totalRounds}
+            />
+          )}
 
         {gameState === "summary" && (
           <div className="rounded-lg bg-white dark:bg-gray-800 light:bg-white p-6 shadow-lg">
@@ -170,9 +179,7 @@ export default function Game() {
                   className="flex items-center justify-between border-b pb-2"
                 >
                   <div>
-                    <p className="font-medium">
-                      Round {index + 1}: {round.location.name}
-                    </p>
+                    <p className="font-medium">Round {index + 1}</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400 light:text-gray-600">
                       Distance: {round.distance.toFixed(2)} km
                     </p>
