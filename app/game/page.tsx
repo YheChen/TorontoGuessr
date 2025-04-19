@@ -101,7 +101,7 @@ export default function Game() {
   const totalScore = scores.reduce((sum, round) => sum + round.score, 0);
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-white text-black dark:bg-[#001233] dark:text-white">
       <Header />
       <div className="container mx-auto p-4">
         <div className="mb-4 flex items-center">
@@ -185,7 +185,7 @@ export default function Game() {
             <div className="flex justify-center">
               <Button
                 onClick={handlePlayAgain}
-                className="bg-[#00205B] hover:bg-[#001845]"
+                className="bg-blue-800 hover:bg-blue-900 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
               >
                 Play Again
               </Button>

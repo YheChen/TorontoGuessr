@@ -1,18 +1,22 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { MapPin, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { MapPin, Clock } from "lucide-react";
 
 interface GameControlsProps {
-  onSubmitGuess: () => void
-  hasGuess: boolean
-  timeRemaining: number
+  onSubmitGuess: () => void;
+  hasGuess: boolean;
+  timeRemaining: number;
 }
 
-export function GameControls({ onSubmitGuess, hasGuess, timeRemaining }: GameControlsProps) {
-  const timePercentage = (timeRemaining / 60) * 100
+export function GameControls({
+  onSubmitGuess,
+  hasGuess,
+  timeRemaining,
+}: GameControlsProps) {
+  const timePercentage = (timeRemaining / 60) * 100;
 
   return (
     <Card className="dark:bg-gray-800 light:bg-white">
@@ -31,7 +35,9 @@ export function GameControls({ onSubmitGuess, hasGuess, timeRemaining }: GameCon
 
           <div className="rounded-md bg-gray-100 dark:bg-gray-700 light:bg-gray-100 p-4">
             <p className="text-sm text-gray-600 dark:text-gray-300 light:text-gray-600">
-              {hasGuess ? "Your guess is placed! Submit when ready." : "Click on the map to place your guess."}
+              {hasGuess
+                ? "Your guess is placed! Submit when ready."
+                : "Click on the map to place your guess."}
             </p>
           </div>
         </div>
@@ -40,12 +46,12 @@ export function GameControls({ onSubmitGuess, hasGuess, timeRemaining }: GameCon
         <Button
           onClick={onSubmitGuess}
           disabled={!hasGuess}
-          className="w-full bg-[#00205B] hover:bg-[#001845] disabled:bg-gray-300"
+          className="w-full bg-[#3bc054] hover:bg-[#2b873c] disabled:bg-gray-300"
         >
           <MapPin className="mr-2 h-4 w-4" />
           Submit Guess
         </Button>
       </CardFooter>
     </Card>
-  )
+  );
 }
