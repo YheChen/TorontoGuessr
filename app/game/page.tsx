@@ -68,11 +68,15 @@ export default function Game() {
   };
 
   const handleSubmitGuess = () => {
-    if (!guessLocation && gameState === "guessing") {
-      return;
-    }
+    if (!currentLocation) return;
 
-    if (guessLocation && currentLocation) {
+    if (!guessLocation) {
+      // User made no guess → 0 points
+      setScores([
+        ...scores,
+        { score: 0, distance: 0, location: currentLocation },
+      ]);
+    } else {
       const distance = calculateDistance(
         guessLocation.lat,
         guessLocation.lng,
@@ -80,10 +84,10 @@ export default function Game() {
         currentLocation.lng
       );
       const score = calculateScore(distance);
-
       setScores([...scores, { score, distance, location: currentLocation }]);
-      setGameState("results");
     }
+
+    setGameState("results");
   };
 
   const handleNextRound = () => {
