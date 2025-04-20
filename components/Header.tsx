@@ -8,7 +8,7 @@ export default function Header() {
       <div className="container mx-auto flex justify-between items-center p-4">
         <div className="flex items-center gap-2">
           <MapPin className="h-6 w-6 text-[#CF142B]" />
-          <h1 className="text-xl font-bold">Toronto GeoGuessr</h1>
+          <h1 className="text-xl font-bold">TorontoGuessr</h1>
         </div>
         <div className="flex items-center gap-4">
           <nav className="hidden md:flex gap-6">
