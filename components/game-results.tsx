@@ -37,9 +37,6 @@ export function GameResults({
         <CardContent className="space-y-4">
           <div>
             <h3 className="text-lg font-semibold"></h3>
-            <p className="text-gray-600 dark:text-gray-400 light:text-gray-600">
-              The location was in
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

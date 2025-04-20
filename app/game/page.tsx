@@ -69,7 +69,7 @@ export default function Game() {
 
   const handleSubmitGuess = () => {
     if (!guessLocation && gameState === "guessing") {
-      setGuessLocation({ lat: 43.6532, lng: -79.3832 });
+      return;
     }
 
     if (guessLocation && currentLocation) {
