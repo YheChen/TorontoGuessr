@@ -19,7 +19,7 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center text-center">
           <div className="mb-8 flex items-center gap-2">
             <MapPin className="h-10 w-10 text-[#CF142B]" />
-            <h1 className="text-4xl font-bold">Toronto GeoGuessr</h1>
+            <h1 className="text-4xl font-bold">TorontoGuessr</h1>
           </div>
 
           <p className="mb-8 max-w-2xl text-lg">
