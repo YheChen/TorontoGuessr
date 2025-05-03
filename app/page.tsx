@@ -23,8 +23,8 @@ export default function Home() {
           </div>
 
           <p className="mb-8 max-w-2xl text-lg">
-            Test your knowledge of Toronto! View street scenes with blurred
-            signs and guess the location. How well do you know the 6ix?
+            Test your knowledge of Toronto! View street scenes and guess the
+            location. How well do you know the 6ix?
           </p>
 
           <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">

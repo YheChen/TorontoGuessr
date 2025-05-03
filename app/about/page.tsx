@@ -34,12 +34,11 @@ export default function About() {
               <p>
                 TorontoGuessr is a game that tests your knowledge of Toronto's
                 streets and neighborhoods. You'll be shown images from around
-                the city with street signs blurred out, and your task is to
-                guess where the photo was taken.
+                the city, and your task is to guess where the photo was taken.
               </p>
 
               <ol className="list-decimal pl-5 space-y-2">
-                <li>You'll see a Toronto street scene with signs blurred</li>
+                <li>You'll see a Toronto street scene</li>
                 <li>
                   Use context clues like architecture, landmarks, and
                   surroundings to guess the location
