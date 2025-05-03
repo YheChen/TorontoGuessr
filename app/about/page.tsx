@@ -21,7 +21,7 @@ export default function About() {
         <div className="flex items-center gap-2 mb-6">
           <MapPin className="h-8 w-8 text-[#CF142B]" />
           <h1 className="text-3xl font-bold dark:text-white light:text-[#00205B]">
-            About Toronto GeoGuessr
+            About TorontoGuessr
           </h1>
         </div>
 
@@ -32,10 +32,10 @@ export default function About() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p>
-                Toronto GeoGuessr is a game that tests your knowledge of
-                Toronto's streets and neighborhoods. You'll be shown images from
-                around the city with street signs blurred out, and your task is
-                to guess where the photo was taken.
+                TorontoGuessr is a game that tests your knowledge of Toronto's
+                streets and neighborhoods. You'll be shown images from around
+                the city with street signs blurred out, and your task is to
+                guess where the photo was taken.
               </p>
 
               <ol className="list-decimal pl-5 space-y-2">
