@@ -23,8 +23,8 @@ export default function Home() {
           </div>
 
           <p className="mb-8 max-w-2xl text-lg">
-            Test your knowledge of Toronto! View street scenes and guess the
-            location. How well do you know the 6ix?
+            Test your knowledge of Toronto! Explore Street View scenes and
+            guess the location. How well do you know the 6ix?
           </p>
 
           <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
@@ -62,7 +62,7 @@ export default function Home() {
               </CardHeader>
               <CardContent className="space-y-2 text-left">
                 <ol className="list-decimal pl-5 space-y-2">
-                  <li>You'll see a Toronto street scene with signs blurred</li>
+                  <li>You'll see a Toronto street scene from Street View</li>
                   <li>Use context clues to guess the location</li>
                   <li>Click on the map to place your guess</li>
                   <li>Score is based on distance from actual location</li>

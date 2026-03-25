@@ -74,9 +74,10 @@ export default function About() {
                   <strong>Google Street View API</strong> - To collect
                   street-level imagery from around Toronto
                 </li>
-                {/* <li>
-                  <strong>YOLO Object Detection</strong> - To automatically detect and blur street signs
-                </li> */}
+                <li>
+                  <strong>Custom backend API</strong> - To select rounds,
+                  validate panoramas, and score guesses
+                </li>
                 <li>
                   <strong>Next.js</strong> - For the web application framework
                 </li>

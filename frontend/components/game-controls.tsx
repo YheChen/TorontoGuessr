@@ -9,12 +9,14 @@ interface GameControlsProps {
   onSubmitGuess: () => void;
   hasGuess: boolean;
   timeRemaining: number;
+  isSubmitting?: boolean;
 }
 
 export function GameControls({
   onSubmitGuess,
   hasGuess,
   timeRemaining,
+  isSubmitting = false,
 }: GameControlsProps) {
   const timePercentage = (timeRemaining / 60) * 100;
 
@@ -36,7 +38,9 @@ export function GameControls({
           <div className="rounded-md bg-gray-100 dark:bg-gray-700 light:bg-gray-100 p-4">
             <p className="text-sm text-gray-600 dark:text-gray-300 light:text-gray-600">
               {hasGuess
-                ? "Your guess is placed! Submit when ready."
+                ? isSubmitting
+                  ? "Submitting your guess..."
+                  : "Your guess is placed! Submit when ready."
                 : "Click on the map to place your guess."}
             </p>
           </div>
@@ -45,11 +49,11 @@ export function GameControls({
       <CardFooter>
         <Button
           onClick={onSubmitGuess}
-          disabled={!hasGuess}
+          disabled={!hasGuess || isSubmitting}
           className="w-full bg-[#3bc054] hover:bg-[#2b873c] disabled:bg-gray-300"
         >
           <MapPin className="mr-2 h-4 w-4" />
-          Submit Guess
+          {isSubmitting ? "Submitting..." : "Submit Guess"}
         </Button>
       </CardFooter>
     </Card>
