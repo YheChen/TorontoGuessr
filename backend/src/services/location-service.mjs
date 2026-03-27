@@ -10,6 +10,8 @@ const TORONTO_BOUNDS = {
 };
 
 const verifiedLocationsRef = collection(db, "verifiedLocations");
+let firestoreWritesEnabled = true;
+let hasWarnedAboutWritePermissions = false;
 
 function generateRandomLocation() {
   const lat =
@@ -37,6 +39,33 @@ function toRound(location) {
   };
 }
 
+function isPermissionDenied(error) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code =
+    "code" in error && typeof error.code === "string" ? error.code : "";
+
+  return code === "permission-denied" || code === "7";
+}
+
+function disableFirestoreWrites(error) {
+  firestoreWritesEnabled = false;
+
+  if (hasWarnedAboutWritePermissions) {
+    return;
+  }
+
+  hasWarnedAboutWritePermissions = true;
+  const message =
+    error instanceof Error ? error.message : "Missing or insufficient permissions.";
+
+  console.warn(
+    `[location-service] Firestore writes disabled for this process: ${message}`
+  );
+}
+
 async function normalizeStoredLocation(candidate) {
   if (candidate.panoId) {
     return {
@@ -55,14 +84,19 @@ async function normalizeStoredLocation(candidate) {
     return null;
   }
 
-  try {
-    await updateDoc(candidate.ref, {
-      lat: validated.lat,
-      lng: validated.lng,
-      panoId: validated.panoId,
-    });
-  } catch {
-    // Read-only Firestore rules should not block gameplay.
+  if (firestoreWritesEnabled) {
+    try {
+      await updateDoc(candidate.ref, {
+        lat: validated.lat,
+        lng: validated.lng,
+        panoId: validated.panoId,
+      });
+    } catch (error) {
+      if (isPermissionDenied(error)) {
+        disableFirestoreWrites(error);
+      }
+      // Read-only Firestore rules should not block gameplay.
+    }
   }
 
   return validated;
@@ -77,14 +111,19 @@ async function createVerifiedLocation() {
       continue;
     }
 
-    try {
-      await addDoc(verifiedLocationsRef, {
-        lat: validated.lat,
-        lng: validated.lng,
-        panoId: validated.panoId,
-      });
-    } catch {
-      // Continue without caching when backend writes are disallowed.
+    if (firestoreWritesEnabled) {
+      try {
+        await addDoc(verifiedLocationsRef, {
+          lat: validated.lat,
+          lng: validated.lng,
+          panoId: validated.panoId,
+        });
+      } catch (error) {
+        if (isPermissionDenied(error)) {
+          disableFirestoreWrites(error);
+        }
+        // Continue without caching when backend writes are disallowed.
+      }
     }
 
     return validated;
