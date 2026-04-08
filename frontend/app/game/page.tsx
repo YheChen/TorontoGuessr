@@ -10,8 +10,10 @@ import { GameProgress } from "@/components/game-progress";
 import GamePanorama from "@/components/gamepanorama";
 import { GameResults } from "@/components/game-results";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   fetchNextRound,
+  saveScoreUsername,
   startGame as startGameRequest,
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
@@ -43,12 +45,22 @@ export default function Game() {
   const [currentResult, setCurrentResult] = useState<GuessResponse | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [savedUsername, setSavedUsername] = useState("Guest");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
+  const [isSavingScore, setIsSavingScore] = useState(false);
 
   const totalScore = scores.reduce((sum, round) => sum + round.score, 0);
 
   const startGame = async () => {
     setGameState("loading");
     setErrorMessage(null);
+    setUsernameInput("");
+    setSavedUsername("Guest");
+    setSaveMessage(null);
+    setSaveErrorMessage(null);
+    setIsSavingScore(false);
 
     try {
       const game = await startGameRequest();
@@ -93,6 +105,34 @@ export default function Game() {
   const handleMapClick = (lat: number, lng: number) => {
     if (gameState === "guessing") {
       setGuessLocation({ lat, lng });
+    }
+  };
+
+  const handleUsernameChange = (value: string) => {
+    setUsernameInput(value.replace(/[^A-Za-z0-9]/g, "").slice(0, 10));
+    setSaveErrorMessage(null);
+    setSaveMessage(null);
+  };
+
+  const handleSaveScore = async () => {
+    if (!sessionId || gameState !== "summary") {
+      return;
+    }
+
+    setIsSavingScore(true);
+    setSaveErrorMessage(null);
+    setSaveMessage(null);
+
+    try {
+      const response = await saveScoreUsername(sessionId, usernameInput);
+      setSavedUsername(response.saved.username);
+      setSaveMessage(`Saved as ${response.saved.username}.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not save score name.";
+      setSaveErrorMessage(message);
+    } finally {
+      setIsSavingScore(false);
     }
   };
 
@@ -156,7 +196,7 @@ export default function Game() {
   };
 
   return (
-    <main className="min-h-screen bg-white text-black dark:bg-[#001233] dark:text-white">
+    <main className="min-h-screen bg-background text-foreground dark:bg-[#001233] dark:text-white">
       <Header />
       <div className="container mx-auto p-4">
         <div className="mb-4 flex items-center">
@@ -176,18 +216,18 @@ export default function Game() {
         </div>
 
         {gameState === "loading" && (
-          <div className="rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
+          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg dark:bg-gray-800">
             <p className="text-lg font-medium">Loading round...</p>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            <p className="mt-2 text-sm text-muted-foreground dark:text-gray-300">
               Preparing Toronto Street View and map data.
             </p>
           </div>
         )}
 
         {gameState === "error" && (
-          <div className="rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
+          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg dark:bg-gray-800">
             <h2 className="text-2xl font-bold">Something went wrong</h2>
-            <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">
+            <p className="mt-3 text-sm text-muted-foreground dark:text-gray-300">
               {errorMessage ?? "The game could not continue."}
             </p>
             <div className="mt-4">
@@ -236,10 +276,13 @@ export default function Game() {
         )}
 
         {gameState === "summary" && (
-          <div className="rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
+          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg dark:bg-gray-800">
             <h2 className="mb-4 text-2xl font-bold">Game Summary</h2>
             <div className="mb-6">
               <p className="text-xl">Total Score: {totalScore}</p>
+              <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
+                Leaderboard name: {savedUsername}
+              </p>
             </div>
 
             <div className="mb-6 space-y-4">
@@ -247,11 +290,11 @@ export default function Game() {
               {scores.map((round) => (
                 <div
                   key={round.roundNumber}
-                  className="flex items-center justify-between border-b pb-2"
+                  className="flex items-center justify-between border-b border-border/70 pb-2"
                 >
                   <div>
                     <p className="font-medium">Round {round.roundNumber}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 light:text-gray-600">
+                    <p className="text-sm text-muted-foreground dark:text-gray-400">
                       {round.distance === null
                         ? "No guess submitted"
                         : `Distance: ${round.distance.toFixed(2)} km`}
@@ -262,10 +305,43 @@ export default function Game() {
               ))}
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="order-1 w-full max-w-sm space-y-2">
+                <p className="text-sm font-medium">Save score?</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={usernameInput}
+                    onChange={(event) => handleUsernameChange(event.target.value)}
+                    placeholder="Guest"
+                    maxLength={10}
+                    className="sm:flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => void handleSaveScore()}
+                    disabled={isSavingScore}
+                    className="sm:min-w-[120px]"
+                  >
+                    {isSavingScore ? "Saving..." : "Save Score"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground dark:text-gray-400">
+                  Letters and numbers only, up to 10 characters. Leave it blank
+                  for Guest.
+                </p>
+                {saveMessage && (
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                    {saveMessage}
+                  </p>
+                )}
+                {saveErrorMessage && (
+                  <p className="text-sm text-red-500">{saveErrorMessage}</p>
+                )}
+              </div>
+
               <Button
                 onClick={() => void startGame()}
-                className="bg-blue-800 text-white hover:bg-blue-900 dark:bg-blue-600 dark:hover:bg-blue-700"
+                className="order-2 self-center bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
               >
                 Play Again
               </Button>

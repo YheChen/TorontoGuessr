@@ -24,11 +24,33 @@ function getSupabaseKey() {
   return supabaseKey;
 }
 
+function formatFilterValue(value) {
+  if (value === null) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return `(${value.map((entry) => String(entry)).join(",")})`;
+  }
+
+  return String(value);
+}
+
 function buildQueryString({ columns = "*", filters = {}, order, limit } = {}) {
   const params = new URLSearchParams();
   params.set("select", columns);
 
   for (const [field, value] of Object.entries(filters)) {
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      "op" in value
+    ) {
+      params.set(field, `${value.op}.${formatFilterValue(value.value)}`);
+      continue;
+    }
+
     if (value === null) {
       params.set(field, "is.null");
       continue;

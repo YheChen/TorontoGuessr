@@ -21,13 +21,13 @@ export function GameControls({
   const timePercentage = (timeRemaining / 60) * 100;
 
   return (
-    <Card className="dark:bg-gray-800 light:bg-white">
+    <Card className="border-border/70 bg-card/95 shadow-md dark:bg-gray-800">
       <CardContent className="pt-6">
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <Clock className="mr-2 h-4 w-4 text-gray-500 dark:text-gray-400 light:text-gray-500" />
+                <Clock className="mr-2 h-4 w-4 text-muted-foreground dark:text-gray-400" />
                 <span className="text-sm font-medium">Time Remaining</span>
               </div>
               <span className="text-sm font-medium">{timeRemaining}s</span>
@@ -35,8 +35,8 @@ export function GameControls({
             <Progress value={timePercentage} className="h-2" />
           </div>
 
-          <div className="rounded-md bg-gray-100 dark:bg-gray-700 light:bg-gray-100 p-4">
-            <p className="text-sm text-gray-600 dark:text-gray-300 light:text-gray-600">
+          <div className="rounded-md bg-secondary p-4 text-secondary-foreground dark:bg-gray-700 dark:text-gray-300">
+            <p className="text-sm">
               {hasGuess
                 ? isSubmitting
                   ? "Submitting your guess..."
@@ -50,7 +50,7 @@ export function GameControls({
         <Button
           onClick={onSubmitGuess}
           disabled={!hasGuess || isSubmitting}
-          className="w-full bg-[#3bc054] hover:bg-[#2b873c] disabled:bg-gray-300"
+          className="w-full bg-[#3bc054] hover:bg-[#2b873c] disabled:bg-slate-300"
         >
           <MapPin className="mr-2 h-4 w-4" />
           {isSubmitting ? "Submitting..." : "Submit Guess"}

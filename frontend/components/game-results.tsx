@@ -30,20 +30,20 @@ export function GameResults({
 }: GameResultsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <Card className="dark:bg-gray-800 light:bg-white">
+      <Card className="border-border/70 bg-card/95 shadow-md dark:bg-gray-800">
         <CardHeader>
           <CardTitle>Round Results</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <p className="text-sm text-gray-500 dark:text-gray-400 light:text-gray-500">
+              <p className="text-sm text-muted-foreground dark:text-gray-400">
                 Your Score
               </p>
               <p className="text-2xl font-bold">{score} points</p>
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-gray-500 dark:text-gray-400 light:text-gray-500">
+              <p className="text-sm text-muted-foreground dark:text-gray-400">
                 Distance
               </p>
               <p className="text-2xl font-bold">
@@ -63,8 +63,8 @@ export function GameResults({
             </div>
           </div>
 
-          <div className="rounded-md bg-gray-100 p-4 dark:bg-gray-700 light:bg-gray-100">
-            <p className="text-sm text-gray-600 dark:text-gray-300 light:text-gray-600">
+          <div className="rounded-md bg-secondary p-4 text-secondary-foreground dark:bg-gray-700 dark:text-gray-300">
+            <p className="text-sm">
               {guessLocation === null
                 ? "Time ran out before you placed a guess."
                 : score > 4000

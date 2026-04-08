@@ -13,7 +13,7 @@ import Header from "@/components/Header";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white text-black dark:bg-[#001233] dark:text-white">
+    <main className="min-h-screen bg-background text-foreground dark:bg-[#001233] dark:text-white">
       <Header />
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col items-center justify-center text-center">
@@ -22,17 +22,17 @@ export default function Home() {
             <h1 className="text-4xl font-bold">TorontoGuessr</h1>
           </div>
 
-          <p className="mb-8 max-w-2xl text-lg">
+          <p className="mb-8 max-w-2xl text-lg text-muted-foreground">
             Test your knowledge of Toronto! Explore Street View scenes and
             guess the location. How well do you know the 6ix?
           </p>
 
           <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
             {/* Start Game Card */}
-            <Card className="border bg-white text-black shadow-md dark:bg-[#00205B] dark:text-white dark:border-[#003566]">
+            <Card className="border-border/70 bg-card/90 shadow-md dark:border-[#003566] dark:bg-[#00205B] dark:text-white">
               <CardHeader>
                 <CardTitle>Play Game</CardTitle>
-                <CardDescription className="text-gray-600 dark:text-blue-100">
+                <CardDescription className="dark:text-blue-100">
                   Start a new game with 5 rounds
                 </CardDescription>
               </CardHeader>
@@ -40,12 +40,12 @@ export default function Home() {
                 <img
                   src="/TorontoGuessrThumbnail.webp?height=200&width=400"
                   alt="Toronto skyline"
-                  className="rounded-md w-full h-48 object-cover"
+                  className="h-48 w-full rounded-md object-cover"
                 />
               </CardContent>
               <CardFooter>
                 <Link href="/game" className="w-full">
-                  <Button className="w-full bg-[#CF142B] hover:bg-[#B01226] text-white">
+                  <Button className="w-full bg-[#CF142B] text-white hover:bg-[#B01226]">
                     Start Game
                   </Button>
                 </Link>
@@ -53,10 +53,10 @@ export default function Home() {
             </Card>
 
             {/* How to Play Card */}
-            <Card className="border bg-white text-black shadow-md dark:bg-[#00205B] dark:text-white dark:border-[#003566]">
+            <Card className="border-border/70 bg-card/90 shadow-md dark:border-[#003566] dark:bg-[#00205B] dark:text-white">
               <CardHeader>
                 <CardTitle>How to Play</CardTitle>
-                <CardDescription className="text-gray-600 dark:text-blue-100">
+                <CardDescription className="dark:text-blue-100">
                   Game rules and scoring
                 </CardDescription>
               </CardHeader>
@@ -73,7 +73,7 @@ export default function Home() {
                 <Link href="/about" className="w-full">
                   <Button
                     variant="outline"
-                    className="w-full border text-[#00205B] hover:bg-gray-100 dark:bg-[#001845] dark:text-white dark:border-white/50 dark:hover:bg-[#00205B]"
+                    className="w-full border-border bg-background/80 text-foreground hover:bg-accent hover:text-accent-foreground dark:border-white/50 dark:bg-[#001845] dark:text-white dark:hover:bg-[#00205B]"
                   >
                     Learn More
                   </Button>

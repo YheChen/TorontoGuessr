@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 
 export default function About() {
   return (
-    <main className="min-h-screen bg-background text-foreground dark:bg-gray-900 light:bg-gray-100">
+    <main className="min-h-screen bg-background text-foreground dark:bg-gray-900">
       <Header />
       <div className="container mx-auto p-6">
         <div className="mb-6">
@@ -18,17 +18,15 @@ export default function About() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-2 mb-6">
+        <div className="mb-6 flex items-center gap-2">
           <MapPin className="h-8 w-8 text-[#CF142B]" />
-          <h1 className="text-3xl font-bold dark:text-white light:text-[#00205B]">
-            About TorontoGuessr
-          </h1>
+          <h1 className="text-3xl font-bold">About TorontoGuessr</h1>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="dark:bg-gray-800 light:bg-[#00205B] light:text-white light:border-[#001233] light:border-2">
+          <Card className="border-border/70 bg-card/90 shadow-md dark:bg-gray-800">
             <CardHeader>
-              <CardTitle className="light:text-white">How to Play</CardTitle>
+              <CardTitle>How to Play</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p>
@@ -57,11 +55,9 @@ export default function About() {
             </CardContent>
           </Card>
 
-          <Card className="dark:bg-gray-800 light:bg-[#00205B] light:text-white light:border-[#001233] light:border-2">
+          <Card className="border-border/70 bg-card/90 shadow-md dark:bg-gray-800">
             <CardHeader>
-              <CardTitle className="light:text-white">
-                About the Project
-              </CardTitle>
+              <CardTitle>About the Project</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p>

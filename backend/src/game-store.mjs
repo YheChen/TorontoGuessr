@@ -1,10 +1,32 @@
 import { randomUUID } from "node:crypto";
 import { calculateDistance, calculateScore } from "./scoring-service.mjs";
 import { insertRow, selectRows, selectSingleRow, updateSingleRow } from "./supabase.mjs";
+import { DEFAULT_USERNAME } from "./username-utils.mjs";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
 const GAME_SESSION_COLUMNS =
-  "id,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
+  "id,username,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
+export const LEADERBOARD_PERIODS = [
+  "lifetime",
+  "daily",
+  "weekly",
+  "monthly",
+];
+
+function getLeaderboardSince(period) {
+  const now = Date.now();
+
+  switch (period) {
+    case "daily":
+      return new Date(now - 24 * 60 * 60 * 1000).toISOString();
+    case "weekly":
+      return new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    case "monthly":
+      return new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    default:
+      return null;
+  }
+}
 
 function buildRoundPayload(session) {
   const round = session.rounds[session.currentRoundIndex];
@@ -25,6 +47,7 @@ function buildRoundPayload(session) {
 function mapSessionRecord(record) {
   return {
     id: record.id,
+    username: record.username ?? DEFAULT_USERNAME,
     rounds: Array.isArray(record.rounds) ? record.rounds : [],
     currentRoundIndex: record.current_round_index,
     totalRounds: record.total_rounds,
@@ -40,6 +63,7 @@ function mapSessionRecord(record) {
 function buildSessionInsert(session) {
   return {
     id: session.id,
+    username: session.username,
     rounds: session.rounds,
     current_round_index: session.currentRoundIndex,
     total_rounds: session.totalRounds,
@@ -68,6 +92,7 @@ async function requireGameSession(sessionId) {
 export async function createGameSession(rounds) {
   const session = {
     id: randomUUID(),
+    username: DEFAULT_USERNAME,
     rounds,
     currentRoundIndex: 0,
     totalRounds: rounds.length,
@@ -178,21 +203,58 @@ export async function submitGuess(sessionId, guessLocation = null) {
 export async function getGameSummary(sessionId) {
   const session = await requireGameSession(sessionId);
   return {
+    username: session.username,
     totalScore: session.totalScore,
     rounds: session.results,
   };
 }
 
-export async function getLeaderboard(limit = 10) {
+export async function saveUsername(sessionId, username) {
+  const session = await requireGameSession(sessionId);
+
+  if (session.status !== "finished") {
+    throw new Error("You can only save a username after finishing the game.");
+  }
+
+  const updatedRecord = await updateSingleRow(
+    GAME_SESSIONS_TABLE,
+    {
+      username,
+    },
+    {
+      filters: { id: sessionId, status: "finished" },
+      columns: GAME_SESSION_COLUMNS,
+    }
+  );
+
+  if (!updatedRecord) {
+    throw new Error("Score name could not be saved.");
+  }
+
+  return {
+    id: updatedRecord.id,
+    username: updatedRecord.username ?? DEFAULT_USERNAME,
+  };
+}
+
+export async function getLeaderboard({ limit = 10, period = "lifetime" } = {}) {
+  const since = getLeaderboardSince(period);
+  const filters = { status: "finished" };
+
+  if (since) {
+    filters.completed_at = { op: "gte", value: since };
+  }
+
   const records = await selectRows(GAME_SESSIONS_TABLE, {
-    columns: "id,total_score,rounds_played,completed_at",
-    filters: { status: "finished" },
-    order: "total_score.desc",
+    columns: "id,username,total_score,rounds_played,completed_at",
+    filters,
+    order: "total_score.desc,completed_at.asc",
     limit,
   });
 
   return records.map((record) => ({
     id: record.id,
+    username: record.username ?? DEFAULT_USERNAME,
     totalScore: record.total_score,
     roundsPlayed: record.rounds_played ?? 0,
     completedAt: record.completed_at,

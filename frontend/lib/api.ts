@@ -2,7 +2,9 @@ import type {
   GuessLocation,
   GuessResponse,
   LeaderboardEntry,
+  LeaderboardPeriod,
   NextRoundResponse,
+  SaveScoreResponse,
   StartGameResponse,
   SummaryResponse,
 } from "@/lib/types";
@@ -61,7 +63,16 @@ export function fetchNextRound(sessionId: string) {
   });
 }
 
-export async function fetchLeaderboard() {
-  const response = await request<{ entries: LeaderboardEntry[] }>("/leaderboard");
+export function saveScoreUsername(sessionId: string, username: string) {
+  return request<SaveScoreResponse>(`/games/${sessionId}/username`, {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+}
+
+export async function fetchLeaderboard(period: LeaderboardPeriod = "lifetime") {
+  const response = await request<{ entries: LeaderboardEntry[] }>(
+    `/leaderboard?period=${encodeURIComponent(period)}`
+  );
   return response.entries;
 }

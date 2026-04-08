@@ -2,9 +2,11 @@ import { URL } from "node:url";
 import { z } from "zod";
 import {
   createGameSession,
+  LEADERBOARD_PERIODS,
   getGameSummary,
   getLeaderboard,
   getRoundForClient,
+  saveUsername,
   submitGuess,
 } from "./game-store.mjs";
 import {
@@ -16,6 +18,7 @@ import {
   setCorsHeaders,
 } from "./http-utils.mjs";
 import { selectGameRounds } from "./services/location-service.mjs";
+import { sanitizeUsername } from "./username-utils.mjs";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -26,6 +29,10 @@ const guessSchema = z.object({
     .nullable()
     .optional(),
 });
+const usernameSchema = z.object({
+  username: z.string().optional(),
+});
+const leaderboardPeriodSchema = z.enum(LEADERBOARD_PERIODS);
 
 export async function routeRequest(request, response) {
   setCorsHeaders(response);
@@ -86,8 +93,24 @@ export async function routeRequest(request, response) {
       return;
     }
 
+    const usernameParams = matchRoute(pathname, "/games/:sessionId/username");
+    if (request.method === "POST" && usernameParams) {
+      const parsedBody = usernameSchema.parse(await readBody(request));
+      const username = sanitizeUsername(parsedBody.username);
+      sendJson(response, 200, {
+        saved: await saveUsername(usernameParams.sessionId, username),
+      });
+      return;
+    }
+
     if (request.method === "GET" && pathname === "/leaderboard") {
-      sendJson(response, 200, { entries: await getLeaderboard() });
+      const period = leaderboardPeriodSchema.parse(
+        url.searchParams.get("period") ?? "lifetime"
+      );
+
+      sendJson(response, 200, {
+        entries: await getLeaderboard({ period }),
+      });
       return;
     }
 

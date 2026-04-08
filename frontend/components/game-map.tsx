@@ -36,11 +36,15 @@ export function GameMap({
   });
 
   if (!isLoaded) {
-    return <div className="text-white bg-black p-4">Loading map...</div>;
+    return (
+      <div className="rounded-lg border border-border/70 bg-card/90 p-4 text-sm text-muted-foreground shadow-md dark:border-transparent dark:bg-black dark:text-white">
+        Loading map...
+      </div>
+    );
   }
 
   return (
-    <Card className="overflow-hidden dark:bg-gray-800 light:bg-white">
+    <Card className="overflow-hidden border-border/70 bg-card/95 shadow-md dark:bg-gray-800">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={centerToronto}

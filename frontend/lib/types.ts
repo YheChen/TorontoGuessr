@@ -39,13 +39,24 @@ export interface NextRoundResponse {
 export interface SummaryResponse {
   gameFinished: true;
   summary: {
+    username: string;
     totalScore: number;
     rounds: GuessResponse[];
   };
 }
 
+export type LeaderboardPeriod = "lifetime" | "daily" | "weekly" | "monthly";
+
+export interface SaveScoreResponse {
+  saved: {
+    id: string;
+    username: string;
+  };
+}
+
 export interface LeaderboardEntry {
   id: string;
+  username: string;
   totalScore: number;
   roundsPlayed: number;
   completedAt: string;
