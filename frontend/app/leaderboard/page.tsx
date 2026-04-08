@@ -49,7 +49,7 @@ export default function Leaderboard() {
 
           {!isLoading && !errorMessage && entries.length === 0 && (
             <p className="my-8 text-center text-gray-500 dark:text-gray-400 light:text-gray-300">
-              No completed games yet. Finish a game to create the first score.
+              No completed games yet. Finish a game to create the first entry.
             </p>
           )}
 
