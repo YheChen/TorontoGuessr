@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { calculateDistance, calculateScore } from "./scoring-service.mjs";
+import { insertRow, selectRows, selectSingleRow, updateSingleRow } from "./supabase.mjs";
 
-const sessions = new Map();
-const finishedGames = [];
+const GAME_SESSIONS_TABLE = "game_sessions";
+const GAME_SESSION_COLUMNS =
+  "id,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
 
 function buildRoundPayload(session) {
   const round = session.rounds[session.currentRoundIndex];
@@ -20,7 +22,50 @@ function buildRoundPayload(session) {
   };
 }
 
-export function createGameSession(rounds) {
+function mapSessionRecord(record) {
+  return {
+    id: record.id,
+    rounds: Array.isArray(record.rounds) ? record.rounds : [],
+    currentRoundIndex: record.current_round_index,
+    totalRounds: record.total_rounds,
+    totalScore: record.total_score,
+    results: Array.isArray(record.results) ? record.results : [],
+    roundsPlayed: record.rounds_played ?? 0,
+    status: record.status,
+    createdAt: record.created_at,
+    completedAt: record.completed_at ?? null,
+  };
+}
+
+function buildSessionInsert(session) {
+  return {
+    id: session.id,
+    rounds: session.rounds,
+    current_round_index: session.currentRoundIndex,
+    total_rounds: session.totalRounds,
+    total_score: session.totalScore,
+    results: session.results,
+    rounds_played: session.roundsPlayed,
+    status: session.status,
+    created_at: session.createdAt,
+    completed_at: session.completedAt,
+  };
+}
+
+async function requireGameSession(sessionId) {
+  const record = await selectSingleRow(GAME_SESSIONS_TABLE, {
+    columns: GAME_SESSION_COLUMNS,
+    filters: { id: sessionId },
+  });
+
+  if (!record) {
+    throw new Error("Game session not found.");
+  }
+
+  return mapSessionRecord(record);
+}
+
+export async function createGameSession(rounds) {
   const session = {
     id: randomUUID(),
     rounds,
@@ -28,25 +73,21 @@ export function createGameSession(rounds) {
     totalRounds: rounds.length,
     totalScore: 0,
     results: [],
+    roundsPlayed: 0,
     status: "in_progress",
     createdAt: new Date().toISOString(),
+    completedAt: null,
   };
 
-  sessions.set(session.id, session);
-  return session;
+  const record = await insertRow(GAME_SESSIONS_TABLE, buildSessionInsert(session), {
+    columns: GAME_SESSION_COLUMNS,
+  });
+
+  return mapSessionRecord(record);
 }
 
-export function getGameSession(sessionId) {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    throw new Error("Game session not found.");
-  }
-
-  return session;
-}
-
-export function getRoundForClient(sessionId) {
-  const session = getGameSession(sessionId);
+export async function getRoundForClient(sessionId) {
+  const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     return null;
   }
@@ -54,8 +95,8 @@ export function getRoundForClient(sessionId) {
   return buildRoundPayload(session);
 }
 
-export function submitGuess(sessionId, guessLocation = null) {
-  const session = getGameSession(sessionId);
+export async function submitGuess(sessionId, guessLocation = null) {
+  const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     throw new Error("Game session is already complete.");
   }
@@ -92,37 +133,68 @@ export function submitGuess(sessionId, guessLocation = null) {
   session.results.push(result);
   session.totalScore += score;
   session.currentRoundIndex += 1;
+  session.roundsPlayed = session.results.length;
 
   const gameFinished = session.currentRoundIndex >= session.totalRounds;
   if (gameFinished) {
     session.status = "finished";
     session.completedAt = new Date().toISOString();
-    finishedGames.push({
-      id: session.id,
-      totalScore: session.totalScore,
-      roundsPlayed: session.results.length,
-      completedAt: session.completedAt,
-    });
+  }
+
+  const updatedRecord = await updateSingleRow(
+    GAME_SESSIONS_TABLE,
+    {
+      current_round_index: session.currentRoundIndex,
+      total_score: session.totalScore,
+      results: session.results,
+      rounds_played: session.roundsPlayed,
+      status: session.status,
+      completed_at: session.completedAt,
+    },
+    {
+      filters: {
+        id: sessionId,
+        current_round_index: session.currentRoundIndex - 1,
+        status: "in_progress",
+      },
+      columns: GAME_SESSION_COLUMNS,
+    }
+  );
+
+  if (!updatedRecord) {
+    throw new Error(
+      "Game session changed before your guess was recorded. Please try again."
+    );
   }
 
   return {
     ...result,
-    totalScore: session.totalScore,
+    totalScore: updatedRecord.total_score,
     gameFinished,
     isLastRound: gameFinished,
   };
 }
 
-export function getGameSummary(sessionId) {
-  const session = getGameSession(sessionId);
+export async function getGameSummary(sessionId) {
+  const session = await requireGameSession(sessionId);
   return {
     totalScore: session.totalScore,
     rounds: session.results,
   };
 }
 
-export function getLeaderboard(limit = 10) {
-  return [...finishedGames]
-    .sort((left, right) => right.totalScore - left.totalScore)
-    .slice(0, limit);
+export async function getLeaderboard(limit = 10) {
+  const records = await selectRows(GAME_SESSIONS_TABLE, {
+    columns: "id,total_score,rounds_played,completed_at",
+    filters: { status: "finished" },
+    order: "total_score.desc",
+    limit,
+  });
+
+  return records.map((record) => ({
+    id: record.id,
+    totalScore: record.total_score,
+    roundsPlayed: record.rounds_played ?? 0,
+    completedAt: record.completed_at,
+  }));
 }

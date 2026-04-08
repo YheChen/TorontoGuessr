@@ -11,16 +11,18 @@ const rawApiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   (process.env.NODE_ENV === "development" ? "http://localhost:3001/api" : undefined);
 
-if (!rawApiBaseUrl) {
-  throw new Error("NEXT_PUBLIC_API_BASE_URL is required outside development.");
+function getApiBaseUrl() {
+  if (!rawApiBaseUrl) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is required outside development.");
+  }
+
+  return rawApiBaseUrl.endsWith("/")
+    ? rawApiBaseUrl.slice(0, -1)
+    : rawApiBaseUrl;
 }
 
-const API_BASE_URL = rawApiBaseUrl.endsWith("/")
-  ? rawApiBaseUrl.slice(0, -1)
-  : rawApiBaseUrl;
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),

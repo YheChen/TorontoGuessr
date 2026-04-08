@@ -1,5 +1,4 @@
-import { addDoc, collection, getDocs, updateDoc } from "firebase/firestore";
-import { db } from "../firebase.mjs";
+import { insertRow, selectRows, updateSingleRow } from "../supabase.mjs";
 import { getValidatedPanorama } from "./streetview-service.mjs";
 
 const TORONTO_BOUNDS = {
@@ -9,9 +8,12 @@ const TORONTO_BOUNDS = {
   east: -79.350063,
 };
 
-const verifiedLocationsRef = collection(db, "verifiedLocations");
-let firestoreWritesEnabled = true;
-let hasWarnedAboutWritePermissions = false;
+const VERIFIED_LOCATIONS_TABLE = "verified_locations";
+const VERIFIED_LOCATION_COLUMNS = "id,lat,lng,pano_id";
+const locationGenerationEnabled =
+  process.env.LOCATION_GENERATION_ENABLED !== "false";
+let locationWritesEnabled = true;
+let hasWarnedAboutWriteFailures = false;
 
 function generateRandomLocation() {
   const lat =
@@ -39,30 +41,18 @@ function toRound(location) {
   };
 }
 
-function isPermissionDenied(error) {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
+function disableLocationWrites(error) {
+  locationWritesEnabled = false;
 
-  const code =
-    "code" in error && typeof error.code === "string" ? error.code : "";
-
-  return code === "permission-denied" || code === "7";
-}
-
-function disableFirestoreWrites(error) {
-  firestoreWritesEnabled = false;
-
-  if (hasWarnedAboutWritePermissions) {
+  if (hasWarnedAboutWriteFailures) {
     return;
   }
 
-  hasWarnedAboutWritePermissions = true;
-  const message =
-    error instanceof Error ? error.message : "Missing or insufficient permissions.";
+  hasWarnedAboutWriteFailures = true;
+  const message = error instanceof Error ? error.message : "Unexpected write failure.";
 
   console.warn(
-    `[location-service] Firestore writes disabled for this process: ${message}`
+    `[location-service] Supabase writes disabled for this process: ${message}`
   );
 }
 
@@ -84,18 +74,23 @@ async function normalizeStoredLocation(candidate) {
     return null;
   }
 
-  if (firestoreWritesEnabled) {
+  if (locationWritesEnabled) {
     try {
-      await updateDoc(candidate.ref, {
-        lat: validated.lat,
-        lng: validated.lng,
-        panoId: validated.panoId,
-      });
+      await updateSingleRow(
+        VERIFIED_LOCATIONS_TABLE,
+        {
+          lat: validated.lat,
+          lng: validated.lng,
+          pano_id: validated.panoId,
+        },
+        {
+          filters: { id: candidate.id },
+          columns: VERIFIED_LOCATION_COLUMNS,
+        }
+      );
     } catch (error) {
-      if (isPermissionDenied(error)) {
-        disableFirestoreWrites(error);
-      }
-      // Read-only Firestore rules should not block gameplay.
+      disableLocationWrites(error);
+      // Cache write failures should not block gameplay.
     }
   }
 
@@ -111,18 +106,22 @@ async function createVerifiedLocation() {
       continue;
     }
 
-    if (firestoreWritesEnabled) {
+    if (locationWritesEnabled) {
       try {
-        await addDoc(verifiedLocationsRef, {
-          lat: validated.lat,
-          lng: validated.lng,
-          panoId: validated.panoId,
-        });
+        await insertRow(
+          VERIFIED_LOCATIONS_TABLE,
+          {
+            lat: validated.lat,
+            lng: validated.lng,
+            pano_id: validated.panoId,
+          },
+          {
+            columns: VERIFIED_LOCATION_COLUMNS,
+          }
+        );
       } catch (error) {
-        if (isPermissionDenied(error)) {
-          disableFirestoreWrites(error);
-        }
-        // Continue without caching when backend writes are disallowed.
+        disableLocationWrites(error);
+        // Continue without caching when backend writes are unavailable.
       }
     }
 
@@ -133,17 +132,17 @@ async function createVerifiedLocation() {
 }
 
 export async function selectGameRounds(count = 5) {
-  const snapshot = await getDocs(verifiedLocationsRef);
   const cachedLocations = shuffle(
-    snapshot.docs.map((document) => {
-      const data = document.data();
-      return {
-        ref: document.ref,
-        lat: data.lat,
-        lng: data.lng,
-        panoId: data.panoId ?? null,
-      };
-    })
+    (
+      await selectRows(VERIFIED_LOCATIONS_TABLE, {
+        columns: VERIFIED_LOCATION_COLUMNS,
+      })
+    ).map((row) => ({
+      id: row.id,
+      lat: row.lat,
+      lng: row.lng,
+      panoId: row.pano_id ?? null,
+    }))
   );
 
   const rounds = [];
@@ -168,6 +167,12 @@ export async function selectGameRounds(count = 5) {
   }
 
   while (rounds.length < count) {
+    if (!locationGenerationEnabled) {
+      throw new Error(
+        `Not enough verified locations in Supabase to start a ${count}-round game without generation.`
+      );
+    }
+
     const validated = await createVerifiedLocation();
     if (seenPanoramas.has(validated.panoId)) {
       continue;

@@ -47,8 +47,12 @@ export async function routeRequest(request, response) {
 
     if (request.method === "POST" && pathname === "/games/start") {
       const rounds = await selectGameRounds(5);
-      const session = createGameSession(rounds);
-      const payload = getRoundForClient(session.id);
+      const session = await createGameSession(rounds);
+      const payload = await getRoundForClient(session.id);
+      if (!payload) {
+        throw new Error("New game session is missing its first round.");
+      }
+
       sendJson(response, 200, {
         sessionId: session.id,
         ...payload,
@@ -59,7 +63,7 @@ export async function routeRequest(request, response) {
     const guessParams = matchRoute(pathname, "/games/:sessionId/guess");
     if (request.method === "POST" && guessParams) {
       const parsedBody = guessSchema.parse(await readBody(request));
-      const result = submitGuess(
+      const result = await submitGuess(
         guessParams.sessionId,
         parsedBody.guessLocation ?? null
       );
@@ -69,11 +73,11 @@ export async function routeRequest(request, response) {
 
     const nextParams = matchRoute(pathname, "/games/:sessionId/next");
     if (request.method === "POST" && nextParams) {
-      const nextRound = getRoundForClient(nextParams.sessionId);
+      const nextRound = await getRoundForClient(nextParams.sessionId);
       if (nextRound === null) {
         sendJson(response, 200, {
           gameFinished: true,
-          summary: getGameSummary(nextParams.sessionId),
+          summary: await getGameSummary(nextParams.sessionId),
         });
         return;
       }
@@ -83,7 +87,7 @@ export async function routeRequest(request, response) {
     }
 
     if (request.method === "GET" && pathname === "/leaderboard") {
-      sendJson(response, 200, { entries: getLeaderboard() });
+      sendJson(response, 200, { entries: await getLeaderboard() });
       return;
     }
 

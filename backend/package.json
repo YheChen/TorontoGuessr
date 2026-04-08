@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "firebase": "^11.6.0",
     "zod": "^3.24.1"
   },
   "scripts": {
     "dev": "node --watch src/server.mjs",
-    "build": "node --check api/[...route].mjs && node --check src/server.mjs && node --check src/router.mjs && node --check src/http-utils.mjs && node --check src/env.mjs && node --check src/firebase.mjs && node --check src/game-store.mjs && node --check src/scoring-service.mjs && node --check src/services/location-service.mjs && node --check src/services/streetview-service.mjs",
+    "build": "node --check api/[...route].mjs && node --check src/server.mjs && node --check src/router.mjs && node --check src/http-utils.mjs && node --check src/env.mjs && node --check src/supabase.mjs && node --check src/game-store.mjs && node --check src/scoring-service.mjs && node --check src/services/location-service.mjs && node --check src/services/streetview-service.mjs",
+    "migrate:verified-locations": "node scripts/migrate-verified-locations-from-firestore.mjs",
     "start": "node src/server.mjs"
   }
 }
