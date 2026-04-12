@@ -13,7 +13,7 @@ import Header from "@/components/Header";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background text-foreground dark:bg-[#001233] dark:text-white">
+    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-[#001233] dark:text-white">
       <Header />
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col items-center justify-center text-center">

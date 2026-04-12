@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 
 export default function About() {
   return (
-    <main className="min-h-screen bg-background text-foreground dark:bg-gray-900">
+    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-gray-900">
       <Header />
       <div className="container mx-auto p-6">
         <div className="mb-6">

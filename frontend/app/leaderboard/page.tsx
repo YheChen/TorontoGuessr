@@ -101,7 +101,7 @@ export default function Leaderboard() {
   const topEntry = entries[0] ?? null;
 
   return (
-    <main className="flex min-h-screen flex-col bg-background text-foreground dark:bg-gray-900">
+    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-gray-900">
       <Header />
       <div className="container mx-auto max-w-5xl px-4 py-10">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

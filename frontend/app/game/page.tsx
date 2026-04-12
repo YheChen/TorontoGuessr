@@ -196,7 +196,7 @@ export default function Game() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-foreground dark:bg-[#001233] dark:text-white">
+    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-[#001233] dark:text-white">
       <Header />
       <div className="container mx-auto p-4">
         <div className="mb-4 flex items-center">
