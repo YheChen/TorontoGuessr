@@ -12,6 +12,8 @@ export const LEADERBOARD_PERIODS = [
   "weekly",
   "monthly",
 ];
+const DEFAULT_STATS_DAYS = 30;
+const DEFAULT_STATS_TIME_ZONE = "America/Toronto";
 
 function getLeaderboardSince(period) {
   const now = Date.now();
@@ -74,6 +76,71 @@ function buildSessionInsert(session) {
     created_at: session.createdAt,
     completed_at: session.completedAt,
   };
+}
+
+function isValidTimeZone(timeZone) {
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getDateKeyParts(value, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    throw new Error("Could not derive a calendar date for game statistics.");
+  }
+
+  return { year, month, day };
+}
+
+function getDateKey(value, timeZone) {
+  const { year, month, day } = getDateKeyParts(value, timeZone);
+  return `${year}-${month}-${day}`;
+}
+
+function formatUtcDateKey(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createDailySeries(days, timeZone) {
+  const todayParts = getDateKeyParts(new Date(), timeZone);
+  const today = new Date(
+    Date.UTC(
+      Number(todayParts.year),
+      Number(todayParts.month) - 1,
+      Number(todayParts.day)
+    )
+  );
+  const series = [];
+
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const current = new Date(today);
+    current.setUTCDate(today.getUTCDate() - index);
+
+    series.push({
+      date: formatUtcDateKey(current),
+      gamesStarted: 0,
+      gamesFinished: 0,
+    });
+  }
+
+  return series;
 }
 
 async function requireGameSession(sessionId) {
@@ -259,4 +326,74 @@ export async function getLeaderboard({ limit = 10, period = "lifetime" } = {}) {
     roundsPlayed: record.rounds_played ?? 0,
     completedAt: record.completed_at,
   }));
+}
+
+export async function getDailyGameStats({
+  days = DEFAULT_STATS_DAYS,
+  timeZone = DEFAULT_STATS_TIME_ZONE,
+} = {}) {
+  const normalizedTimeZone = isValidTimeZone(timeZone)
+    ? timeZone
+    : DEFAULT_STATS_TIME_ZONE;
+  const series = createDailySeries(days, normalizedTimeZone);
+  const seriesByDate = new Map(series.map((entry) => [entry.date, entry]));
+  const since = new Date(Date.now() - (days + 2) * 24 * 60 * 60 * 1000).toISOString();
+
+  const [startedSessions, finishedSessions] = await Promise.all([
+    selectRows(GAME_SESSIONS_TABLE, {
+      columns: "created_at",
+      filters: {
+        created_at: { op: "gte", value: since },
+      },
+      order: "created_at.asc",
+    }),
+    selectRows(GAME_SESSIONS_TABLE, {
+      columns: "completed_at",
+      filters: {
+        status: "finished",
+        completed_at: { op: "gte", value: since },
+      },
+      order: "completed_at.asc",
+    }),
+  ]);
+
+  for (const session of startedSessions) {
+    const date = getDateKey(session.created_at, normalizedTimeZone);
+    const entry = seriesByDate.get(date);
+
+    if (entry) {
+      entry.gamesStarted += 1;
+    }
+  }
+
+  for (const session of finishedSessions) {
+    if (!session.completed_at) {
+      continue;
+    }
+
+    const date = getDateKey(session.completed_at, normalizedTimeZone);
+    const entry = seriesByDate.get(date);
+
+    if (entry) {
+      entry.gamesFinished += 1;
+    }
+  }
+
+  const totals = series.reduce(
+    (summary, entry) => ({
+      gamesStarted: summary.gamesStarted + entry.gamesStarted,
+      gamesFinished: summary.gamesFinished + entry.gamesFinished,
+    }),
+    { gamesStarted: 0, gamesFinished: 0 }
+  );
+
+  return {
+    days,
+    timeZone: normalizedTimeZone,
+    generatedAt: new Date().toISOString(),
+    rangeStart: series[0]?.date ?? null,
+    rangeEnd: series[series.length - 1]?.date ?? null,
+    totals,
+    series,
+  };
 }

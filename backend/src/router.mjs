@@ -4,6 +4,7 @@ import {
   createGameSession,
   LEADERBOARD_PERIODS,
   getGameSummary,
+  getDailyGameStats,
   getLeaderboard,
   getRoundForClient,
   saveUsername,
@@ -33,6 +34,10 @@ const usernameSchema = z.object({
   username: z.string().optional(),
 });
 const leaderboardPeriodSchema = z.enum(LEADERBOARD_PERIODS);
+const gameStatsQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).optional(),
+  timeZone: z.string().trim().min(1).max(100).optional(),
+});
 
 export async function routeRequest(request, response) {
   setCorsHeaders(response);
@@ -111,6 +116,16 @@ export async function routeRequest(request, response) {
       sendJson(response, 200, {
         entries: await getLeaderboard({ period }),
       });
+      return;
+    }
+
+    if (request.method === "GET" && pathname === "/stats/games") {
+      const query = gameStatsQuerySchema.parse({
+        days: url.searchParams.get("days") ?? undefined,
+        timeZone: url.searchParams.get("timeZone") ?? undefined,
+      });
+
+      sendJson(response, 200, await getDailyGameStats(query));
       return;
     }
 
