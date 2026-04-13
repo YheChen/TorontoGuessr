@@ -49,7 +49,7 @@ const completedAtFormatter = new Intl.DateTimeFormat("en-CA", {
   timeStyle: "short",
 });
 const PREVIEW_LIMIT = 5;
-const PAGINATED_LIMIT = 10;
+const EXPANDED_LIMIT = 25;
 
 function getPaginationItems(currentPage: number, totalPages: number) {
   if (totalPages <= 7) {
@@ -78,15 +78,15 @@ function getPaginationItems(currentPage: number, totalPages: number) {
 
 function getRankStyles(index: number) {
   if (index === 0) {
-    return "border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-100";
+    return "border-yellow-400 bg-yellow-200 text-yellow-950 dark:border-yellow-300/70 dark:bg-yellow-400/20 dark:text-yellow-100";
   }
 
   if (index === 1) {
-    return "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-400/40 dark:bg-slate-500/15 dark:text-slate-100";
+    return "border-zinc-300 bg-zinc-100 text-zinc-800 dark:border-zinc-300/60 dark:bg-zinc-300/15 dark:text-zinc-100";
   }
 
   if (index === 2) {
-    return "border-orange-300 bg-orange-100 text-orange-900 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-100";
+    return "border-orange-500 bg-orange-200 text-orange-950 dark:border-orange-400/60 dark:bg-orange-500/20 dark:text-orange-100";
   }
 
   return "border-border bg-secondary text-secondary-foreground";
@@ -100,7 +100,7 @@ export default function Leaderboard() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const currentLimit = isExpanded ? PAGINATED_LIMIT : PREVIEW_LIMIT;
+  const currentLimit = isExpanded ? EXPANDED_LIMIT : PREVIEW_LIMIT;
 
   useEffect(() => {
     let isCancelled = false;
@@ -163,6 +163,7 @@ export default function Leaderboard() {
   const showingFrom = totalEntries === 0 ? 0 : rankOffset + 1;
   const showingTo = totalEntries === 0 ? 0 : rankOffset + entries.length;
   const paginationItems = getPaginationItems(currentPage, totalPages);
+  const shouldPaginateExpanded = isExpanded && period !== "lifetime";
   const showMoreAvailable =
     !isLoading && !errorMessage && !isExpanded && totalEntries > PREVIEW_LIMIT;
   const summaryText = isLoading
@@ -171,6 +172,10 @@ export default function Leaderboard() {
       ? `Showing top ${entries.length} of ${totalEntries} score${
           totalEntries === 1 ? "" : "s"
         } for ${activeOption.label.toLowerCase()} play.`
+      : period === "lifetime"
+        ? `Showing top ${entries.length} of ${totalEntries} score${
+            totalEntries === 1 ? "" : "s"
+          } for ${activeOption.label.toLowerCase()} play.`
       : `Showing ${showingFrom}-${showingTo} of ${totalEntries} score${
           totalEntries === 1 ? "" : "s"
         } for ${activeOption.label.toLowerCase()} play.`;
@@ -215,8 +220,8 @@ export default function Leaderboard() {
           })}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr,1.8fr]">
-          <section className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
+        <div className="grid gap-6 lg:grid-cols-[1fr,1.8fr] lg:items-start">
+          <section className="self-start rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
             <div className="flex items-center gap-2 text-primary dark:text-white">
               <Trophy className="h-5 w-5" />
               <p className="text-sm font-semibold uppercase tracking-[0.12em]">
@@ -233,7 +238,7 @@ export default function Leaderboard() {
                 </div>
                 <div className="rounded-lg bg-secondary p-4 text-secondary-foreground dark:bg-gray-700 dark:text-gray-300">
                   <p className="text-sm font-medium">
-                    Completed {topEntry.roundsPlayed} rounds on{" "}
+                    Completed{" "}
                     {completedAtFormatter.format(new Date(topEntry.completedAt))}
                   </p>
                 </div>
@@ -295,9 +300,6 @@ export default function Leaderboard() {
                   </div>
                   <div className="text-right">
                     <p className="font-bold">{entry.totalScore} points</p>
-                    <p className="text-sm text-muted-foreground">
-                      {entry.roundsPlayed} rounds
-                    </p>
                   </div>
                 </div>
                 );
@@ -321,7 +323,10 @@ export default function Leaderboard() {
             </div>
           )}
 
-          {!isLoading && !errorMessage && isExpanded && totalPages > 1 && (
+          {!isLoading &&
+            !errorMessage &&
+            shouldPaginateExpanded &&
+            totalPages > 1 && (
             <Pagination className="mt-6">
               <PaginationContent className="flex-wrap justify-center gap-2">
                 <PaginationItem>
