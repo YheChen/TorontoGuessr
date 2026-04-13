@@ -280,7 +280,7 @@ export default function ReviewLocationsPage() {
           </Card>
         )}
 
-        {adminToken && isLoading && (
+        {adminToken && isLoading && !queue && (
           <Card className="border-border/70 bg-card/90 dark:bg-gray-800">
             <CardContent className="p-6 text-sm text-muted-foreground">
               Loading review queue...
@@ -308,8 +308,8 @@ export default function ReviewLocationsPage() {
           </Card>
         )}
 
-        {adminToken && !isLoading && currentEntry && (
-          <div key={currentEntry.id}>
+        {adminToken && currentEntry && (
+          <div>
             <div className="grid gap-6 xl:grid-cols-[1.55fr,1fr]">
               <section className="rounded-lg border border-border/70 bg-card/90 p-4 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
                 <ReviewLocationPanorama
@@ -385,7 +385,7 @@ export default function ReviewLocationsPage() {
               <Button
                 type="button"
                 variant="destructive"
-                disabled={isMutating}
+                disabled={isMutating || isLoading}
                 onClick={() => void handleDecision("reject")}
               >
                 Reject
@@ -408,7 +408,7 @@ export default function ReviewLocationsPage() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={!lastAction || isMutating}
+                disabled={!lastAction || isMutating || isLoading}
                 onClick={() => void handleUndo()}
               >
                 Undo Last Action
