@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { calculateDistance, calculateScore } from "./scoring-service.mjs";
-import { insertRow, selectRows, selectSingleRow, updateSingleRow } from "./supabase.mjs";
+import {
+  countRows,
+  insertRow,
+  selectRows,
+  selectSingleRow,
+  updateSingleRow,
+} from "./supabase.mjs";
 import { DEFAULT_USERNAME } from "./username-utils.mjs";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
@@ -304,28 +310,49 @@ export async function saveUsername(sessionId, username) {
   };
 }
 
-export async function getLeaderboard({ limit = 10, period = "lifetime" } = {}) {
+export async function getLeaderboard({
+  limit = 10,
+  page = 1,
+  period = "lifetime",
+} = {}) {
   const since = getLeaderboardSince(period);
   const filters = { status: "finished" };
+  const offset = (page - 1) * limit;
 
   if (since) {
     filters.completed_at = { op: "gte", value: since };
   }
 
-  const records = await selectRows(GAME_SESSIONS_TABLE, {
-    columns: "id,username,total_score,rounds_played,completed_at",
-    filters,
-    order: "total_score.desc,completed_at.asc",
-    limit,
-  });
+  const [records, total] = await Promise.all([
+    selectRows(GAME_SESSIONS_TABLE, {
+      columns: "id,username,total_score,rounds_played,completed_at",
+      filters,
+      order: "total_score.desc,completed_at.asc",
+      limit,
+      offset,
+    }),
+    countRows(GAME_SESSIONS_TABLE, { filters }),
+  ]);
 
-  return records.map((record) => ({
+  const entries = records.map((record) => ({
     id: record.id,
     username: record.username ?? DEFAULT_USERNAME,
     totalScore: record.total_score,
     roundsPlayed: record.rounds_played ?? 0,
     completedAt: record.completed_at,
   }));
+
+  const totalPages = total === 0 ? 1 : Math.ceil(total / limit);
+
+  return {
+    entries,
+    total,
+    page,
+    limit,
+    totalPages,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages,
+  };
 }
 
 export async function getDailyGameStats({

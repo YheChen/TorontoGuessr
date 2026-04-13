@@ -61,3 +61,13 @@ export interface LeaderboardEntry {
   roundsPlayed: number;
   completedAt: string;
 }
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}

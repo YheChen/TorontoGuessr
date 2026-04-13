@@ -36,7 +36,7 @@ function formatFilterValue(value) {
   return String(value);
 }
 
-function buildQueryString({ columns = "*", filters = {}, order, limit } = {}) {
+function buildQueryString({ columns = "*", filters = {}, order, limit, offset } = {}) {
   const params = new URLSearchParams();
   params.set("select", columns);
 
@@ -67,10 +67,17 @@ function buildQueryString({ columns = "*", filters = {}, order, limit } = {}) {
     params.set("limit", String(limit));
   }
 
+  if (typeof offset === "number") {
+    params.set("offset", String(offset));
+  }
+
   return params;
 }
 
-async function supabaseRequest(pathname, { method = "GET", query, body } = {}) {
+async function supabaseRequest(
+  pathname,
+  { method = "GET", query, body, preferCount = false, returnHeaders = false } = {}
+) {
   const url = new URL(pathname, getSupabaseBaseUrl());
   if (query) {
     url.search = query.toString();
@@ -87,19 +94,30 @@ async function supabaseRequest(pathname, { method = "GET", query, body } = {}) {
     headers.Prefer = "return=representation";
   }
 
+  if (preferCount) {
+    headers.Prefer = headers.Prefer
+      ? `${headers.Prefer},count=exact`
+      : "count=exact";
+  }
+
   const response = await fetch(url, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  const payload = await response.json().catch(() => null);
+  const payload =
+    method === "HEAD" ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const message =
       payload && typeof payload === "object"
         ? payload.message ?? payload.error_description ?? payload.error
         : null;
     throw new Error(message || `Supabase request failed with ${response.status}.`);
+  }
+
+  if (returnHeaders) {
+    return { payload, headers: response.headers };
   }
 
   return payload;
@@ -166,4 +184,29 @@ export async function updateSingleRow(
   }
 
   return payload[0] ?? null;
+}
+
+export async function countRows(table, { filters = {} } = {}) {
+  const { headers } = await supabaseRequest(`/rest/v1/${table}`, {
+    method: "HEAD",
+    query: buildQueryString({
+      columns: "id",
+      filters,
+      limit: 1,
+    }),
+    preferCount: true,
+    returnHeaders: true,
+  });
+
+  const contentRange = headers.get("content-range");
+  if (!contentRange) {
+    throw new Error(`Supabase count for ${table} did not return content-range.`);
+  }
+
+  const total = Number(contentRange.split("/")[1]);
+  if (!Number.isFinite(total)) {
+    throw new Error(`Supabase count for ${table} returned an invalid total.`);
+  }
+
+  return total;
 }

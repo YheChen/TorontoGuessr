@@ -3,6 +3,7 @@ import type {
   GuessResponse,
   LeaderboardEntry,
   LeaderboardPeriod,
+  LeaderboardResponse,
   NextRoundResponse,
   SaveScoreResponse,
   StartGameResponse,
@@ -70,9 +71,12 @@ export function saveScoreUsername(sessionId: string, username: string) {
   });
 }
 
-export async function fetchLeaderboard(period: LeaderboardPeriod = "lifetime") {
-  const response = await request<{ entries: LeaderboardEntry[] }>(
-    `/leaderboard?period=${encodeURIComponent(period)}`
+export async function fetchLeaderboard(
+  period: LeaderboardPeriod = "lifetime",
+  { page = 1, limit = 10 } = {}
+) {
+  const response = await request<LeaderboardResponse>(
+    `/leaderboard?period=${encodeURIComponent(period)}&page=${page}&limit=${limit}`
   );
-  return response.entries;
+  return response;
 }

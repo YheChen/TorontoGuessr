@@ -34,6 +34,11 @@ const usernameSchema = z.object({
   username: z.string().optional(),
 });
 const leaderboardPeriodSchema = z.enum(LEADERBOARD_PERIODS);
+const leaderboardQuerySchema = z.object({
+  period: leaderboardPeriodSchema.default("lifetime"),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  limit: z.coerce.number().int().min(1).max(25).default(10),
+});
 const gameStatsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(365).optional(),
   timeZone: z.string().trim().min(1).max(100).optional(),
@@ -109,13 +114,13 @@ export async function routeRequest(request, response) {
     }
 
     if (request.method === "GET" && pathname === "/leaderboard") {
-      const period = leaderboardPeriodSchema.parse(
-        url.searchParams.get("period") ?? "lifetime"
-      );
-
-      sendJson(response, 200, {
-        entries: await getLeaderboard({ period }),
+      const query = leaderboardQuerySchema.parse({
+        period: url.searchParams.get("period") ?? undefined,
+        page: url.searchParams.get("page") ?? undefined,
+        limit: url.searchParams.get("limit") ?? undefined,
       });
+
+      sendJson(response, 200, await getLeaderboard(query));
       return;
     }
 
