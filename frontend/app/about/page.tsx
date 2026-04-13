@@ -36,11 +36,8 @@ export default function About() {
               </p>
 
               <ol className="list-decimal pl-5 space-y-2">
-                <li>You'll see a Toronto street scene</li>
-                <li>
-                  Use context clues like architecture, landmarks, and
-                  surroundings to guess the location
-                </li>
+                <li>You'll see a Toronto street panorama</li>
+                <li>You can click around to explore the area</li>
                 <li>Click on the map to place your guess</li>
                 <li>Submit your guess to see how close you were</li>
                 <li>Score is based on distance from actual location</li>
