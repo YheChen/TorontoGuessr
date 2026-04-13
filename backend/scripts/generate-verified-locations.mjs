@@ -21,7 +21,7 @@ function parseRequestedCount() {
 
   if (!Number.isInteger(count) || count <= 0) {
     throw new Error(
-      `Invalid location count "${rawCount}". Provide a positive integer.`
+      `Invalid location count "${rawCount}". Provide a positive integer.`,
     );
   }
 
@@ -47,9 +47,9 @@ async function loadExistingPanoramas() {
   return new Set(
     rows
       .map((row) =>
-        typeof row.pano_id === "string" ? row.pano_id.trim() : null
+        typeof row.pano_id === "string" ? row.pano_id.trim() : null,
       )
-      .filter(Boolean)
+      .filter(Boolean),
   );
 }
 
@@ -59,7 +59,7 @@ async function main() {
   const beforeCount = await countRows(VERIFIED_LOCATIONS_TABLE);
   const maxAttempts = Math.max(
     requestedCount * MAX_ATTEMPTS_MULTIPLIER,
-    requestedCount + 25
+    requestedCount + 25,
   );
 
   let insertedCount = 0;
@@ -70,7 +70,7 @@ async function main() {
   while (insertedCount < requestedCount) {
     if (attempts >= maxAttempts) {
       throw new Error(
-        `Stopped after ${attempts} attempts. Inserted ${insertedCount}/${requestedCount} new locations.`
+        `Stopped after ${attempts} attempts. Inserted ${insertedCount}/${requestedCount} new locations.`,
       );
     }
 
@@ -98,7 +98,7 @@ async function main() {
       },
       {
         columns: "id,pano_id",
-      }
+      },
     );
 
     existingPanoramas.add(validated.panoId);
@@ -109,7 +109,7 @@ async function main() {
       insertedCount === requestedCount
     ) {
       console.log(
-        `Inserted ${insertedCount}/${requestedCount} new verified locations...`
+        `Inserted ${insertedCount}/${requestedCount} new verified locations...`,
       );
     }
   }

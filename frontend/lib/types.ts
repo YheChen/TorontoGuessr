@@ -71,3 +71,34 @@ export interface LeaderboardResponse {
   hasPreviousPage: boolean;
   hasNextPage: boolean;
 }
+
+export type LocationReviewStatus = "pending" | "rejected" | "accepted";
+
+export interface LocationReviewEntry {
+  id: string;
+  lat: number;
+  lng: number;
+  panoId: string | null;
+  manuallyVerified: boolean;
+  reviewStatus: LocationReviewStatus;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface LocationReviewQueueResponse {
+  index: number;
+  total: number;
+  pendingCount: number;
+  rejectedCount: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  entry: LocationReviewEntry | null;
+}
+
+export interface UpdateLocationReviewResponse {
+  location: LocationReviewEntry;
+}
+
+export interface DeleteRejectedLocationsResponse {
+  deletedCount: number;
+}

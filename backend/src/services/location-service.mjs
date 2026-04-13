@@ -1,4 +1,11 @@
-import { insertRow, selectRows, updateSingleRow } from "../supabase.mjs";
+import {
+  countRows,
+  deleteRows,
+  insertRow,
+  selectRows,
+  selectSingleRow,
+  updateSingleRow,
+} from "../supabase.mjs";
 import { getValidatedPanorama } from "./streetview-service.mjs";
 
 const TORONTO_BOUNDS = {
@@ -9,11 +16,17 @@ const TORONTO_BOUNDS = {
 };
 
 const VERIFIED_LOCATIONS_TABLE = "verified_locations";
-const VERIFIED_LOCATION_COLUMNS = "id,lat,lng,pano_id";
+const VERIFIED_LOCATION_COLUMNS =
+  "id,lat,lng,pano_id,manually_verified,review_status,created_at,updated_at";
 const locationGenerationEnabled =
   process.env.LOCATION_GENERATION_ENABLED !== "false";
 let locationWritesEnabled = true;
 let hasWarnedAboutWriteFailures = false;
+const REVIEW_STATUSES = {
+  PENDING: "pending",
+  REJECTED: "rejected",
+  ACCEPTED: "accepted",
+};
 
 function generateRandomLocation() {
   const lat =
@@ -38,6 +51,19 @@ function toRound(location) {
     heading: Math.floor(Math.random() * 360),
     pitch: 0,
     zoom: 1,
+  };
+}
+
+function mapVerifiedLocationRow(row) {
+  return {
+    id: row.id,
+    lat: row.lat,
+    lng: row.lng,
+    panoId: row.pano_id ?? null,
+    manuallyVerified: row.manually_verified ?? false,
+    reviewStatus: row.review_status ?? REVIEW_STATUSES.PENDING,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
   };
 }
 
@@ -132,18 +158,27 @@ async function createVerifiedLocation() {
 }
 
 export async function selectGameRounds(count = 5) {
-  const cachedLocations = shuffle(
-    (
-      await selectRows(VERIFIED_LOCATIONS_TABLE, {
-        columns: VERIFIED_LOCATION_COLUMNS,
-      })
-    ).map((row) => ({
-      id: row.id,
-      lat: row.lat,
-      lng: row.lng,
-      panoId: row.pano_id ?? null,
-    }))
-  );
+  const allCachedLocations = (
+    await selectRows(VERIFIED_LOCATIONS_TABLE, {
+      columns: VERIFIED_LOCATION_COLUMNS,
+    })
+  ).map(mapVerifiedLocationRow);
+  const cachedLocations = [
+    ...shuffle(
+      allCachedLocations.filter(
+        (row) =>
+          row.manuallyVerified &&
+          row.reviewStatus !== REVIEW_STATUSES.REJECTED
+      )
+    ),
+    ...shuffle(
+      allCachedLocations.filter(
+        (row) =>
+          !row.manuallyVerified &&
+          row.reviewStatus !== REVIEW_STATUSES.REJECTED
+      )
+    ),
+  ];
 
   const rounds = [];
   const seenPanoramas = new Set();
@@ -183,4 +218,93 @@ export async function selectGameRounds(count = 5) {
   }
 
   return rounds;
+}
+
+export async function getLocationReviewQueue({ index = 0 } = {}) {
+  const total = await countRows(VERIFIED_LOCATIONS_TABLE, {
+    filters: {
+      manually_verified: false,
+      review_status: REVIEW_STATUSES.PENDING,
+    },
+  });
+
+  const clampedIndex = total === 0 ? 0 : Math.min(index, total - 1);
+  const [entryRecord, rejectedCount] = await Promise.all([
+    total === 0
+      ? Promise.resolve(null)
+      : selectSingleRow(VERIFIED_LOCATIONS_TABLE, {
+          columns: VERIFIED_LOCATION_COLUMNS,
+          filters: {
+            manually_verified: false,
+            review_status: REVIEW_STATUSES.PENDING,
+          },
+          order: "created_at.asc",
+          offset: clampedIndex,
+        }),
+    countRows(VERIFIED_LOCATIONS_TABLE, {
+      filters: {
+        manually_verified: false,
+        review_status: REVIEW_STATUSES.REJECTED,
+      },
+    }),
+  ]);
+
+  return {
+    index: clampedIndex,
+    total,
+    pendingCount: total,
+    rejectedCount,
+    hasPrevious: clampedIndex > 0,
+    hasNext: clampedIndex < total - 1,
+    entry: entryRecord ? mapVerifiedLocationRow(entryRecord) : null,
+  };
+}
+
+export async function updateLocationReviewStatus(locationId, action) {
+  const updates =
+    action === "accept"
+      ? {
+          manually_verified: true,
+          review_status: REVIEW_STATUSES.ACCEPTED,
+        }
+      : action === "reject"
+        ? {
+            manually_verified: false,
+            review_status: REVIEW_STATUSES.REJECTED,
+          }
+        : {
+            manually_verified: false,
+            review_status: REVIEW_STATUSES.PENDING,
+          };
+
+  const updatedRecord = await updateSingleRow(
+    VERIFIED_LOCATIONS_TABLE,
+    updates,
+    {
+      filters: { id: locationId },
+      columns: VERIFIED_LOCATION_COLUMNS,
+    }
+  );
+
+  if (!updatedRecord) {
+    const error = new Error("Verified location not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return mapVerifiedLocationRow(updatedRecord);
+}
+
+export async function deleteRejectedLocations() {
+  const deletedRows = await deleteRows(VERIFIED_LOCATIONS_TABLE, {
+    filters: {
+      manually_verified: false,
+      review_status: REVIEW_STATUSES.REJECTED,
+    },
+    columns: "id",
+  });
+
+  return {
+    deletedCount: deletedRows.length,
+  };
 }

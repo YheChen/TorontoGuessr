@@ -11,6 +11,11 @@ import {
   submitGuess,
 } from "./game-store.mjs";
 import {
+  deleteRejectedLocations,
+  getLocationReviewQueue,
+  updateLocationReviewStatus,
+} from "./services/location-service.mjs";
+import {
   matchRoute,
   normalizePathname,
   readBody,
@@ -39,10 +44,45 @@ const leaderboardQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).default(1),
   limit: z.coerce.number().int().min(1).max(25).default(10),
 });
+const adminLocationReviewQuerySchema = z.object({
+  index: z.coerce.number().int().min(0).default(0),
+});
+const adminLocationReviewActionSchema = z.object({
+  action: z.enum(["accept", "reject", "undo"]),
+});
 const gameStatsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(365).optional(),
   timeZone: z.string().trim().min(1).max(100).optional(),
 });
+
+function createHttpError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function requireAdminToken(request) {
+  const expectedToken = process.env.ADMIN_REVIEW_TOKEN?.trim();
+
+  if (!expectedToken) {
+    throw createHttpError(500, "ADMIN_REVIEW_TOKEN is not configured.");
+  }
+
+  const authHeader = request.headers.authorization;
+  const bearerToken =
+    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : null;
+  const headerToken = request.headers["x-admin-token"];
+  const providedToken =
+    typeof headerToken === "string" && headerToken.trim()
+      ? headerToken.trim()
+      : bearerToken;
+
+  if (providedToken !== expectedToken) {
+    throw createHttpError(401, "Unauthorized.");
+  }
+}
 
 export async function routeRequest(request, response) {
   setCorsHeaders(response);
@@ -59,6 +99,25 @@ export async function routeRequest(request, response) {
   try {
     if (request.method === "GET" && pathname === "/health") {
       sendJson(response, 200, { status: "ok" });
+      return;
+    }
+
+    if (request.method === "GET" && pathname === "/admin/review-locations") {
+      requireAdminToken(request);
+      const query = adminLocationReviewQuerySchema.parse({
+        index: url.searchParams.get("index") ?? undefined,
+      });
+
+      sendJson(response, 200, await getLocationReviewQueue(query));
+      return;
+    }
+
+    if (
+      request.method === "DELETE" &&
+      pathname === "/admin/review-locations/rejected"
+    ) {
+      requireAdminToken(request);
+      sendJson(response, 200, await deleteRejectedLocations());
       return;
     }
 
@@ -134,10 +193,39 @@ export async function routeRequest(request, response) {
       return;
     }
 
+    const adminReviewParams = matchRoute(
+      pathname,
+      "/admin/review-locations/:locationId"
+    );
+    if (request.method === "PATCH" && adminReviewParams) {
+      requireAdminToken(request);
+      const parsedBody = adminLocationReviewActionSchema.parse(
+        await readBody(request)
+      );
+
+      sendJson(response, 200, {
+        location: await updateLocationReviewStatus(
+          adminReviewParams.locationId,
+          parsedBody.action
+        ),
+      });
+      return;
+    }
+
     sendError(response, 404, "Route not found.");
   } catch (error) {
     if (error instanceof z.ZodError) {
       sendError(response, 400, "Invalid request payload.");
+      return;
+    }
+
+    if (
+      error &&
+      typeof error === "object" &&
+      "statusCode" in error &&
+      typeof error.statusCode === "number"
+    ) {
+      sendError(response, error.statusCode, error.message);
       return;
     }
 

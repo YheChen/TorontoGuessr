@@ -76,7 +76,14 @@ function buildQueryString({ columns = "*", filters = {}, order, limit, offset } 
 
 async function supabaseRequest(
   pathname,
-  { method = "GET", query, body, preferCount = false, returnHeaders = false } = {}
+  {
+    method = "GET",
+    query,
+    body,
+    preferCount = false,
+    preferRepresentation = false,
+    returnHeaders = false,
+  } = {}
 ) {
   const url = new URL(pathname, getSupabaseBaseUrl());
   if (query) {
@@ -98,6 +105,12 @@ async function supabaseRequest(
     headers.Prefer = headers.Prefer
       ? `${headers.Prefer},count=exact`
       : "count=exact";
+  }
+
+  if (preferRepresentation && body === undefined) {
+    headers.Prefer = headers.Prefer
+      ? `${headers.Prefer},return=representation`
+      : "return=representation";
   }
 
   const response = await fetch(url, {
@@ -209,4 +222,17 @@ export async function countRows(table, { filters = {} } = {}) {
   }
 
   return total;
+}
+
+export async function deleteRows(
+  table,
+  { filters = {}, columns = "*" } = {}
+) {
+  const payload = await supabaseRequest(`/rest/v1/${table}`, {
+    method: "DELETE",
+    query: buildQueryString({ columns, filters }),
+    preferRepresentation: true,
+  });
+
+  return Array.isArray(payload) ? payload : [];
 }

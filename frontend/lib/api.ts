@@ -1,13 +1,15 @@
 import type {
+  DeleteRejectedLocationsResponse,
   GuessLocation,
   GuessResponse,
-  LeaderboardEntry,
   LeaderboardPeriod,
   LeaderboardResponse,
+  LocationReviewQueueResponse,
   NextRoundResponse,
   SaveScoreResponse,
   StartGameResponse,
   SummaryResponse,
+  UpdateLocationReviewResponse,
 } from "@/lib/types";
 
 const rawApiBaseUrl =
@@ -79,4 +81,44 @@ export async function fetchLeaderboard(
     `/leaderboard?period=${encodeURIComponent(period)}&page=${page}&limit=${limit}`
   );
   return response;
+}
+
+function getAdminHeaders(adminToken: string) {
+  return {
+    "x-admin-token": adminToken,
+  };
+}
+
+export function fetchLocationReviewQueue(index: number, adminToken: string) {
+  return request<LocationReviewQueueResponse>(
+    `/admin/review-locations?index=${index}`,
+    {
+      headers: getAdminHeaders(adminToken),
+    }
+  );
+}
+
+export function updateLocationReviewStatus(
+  locationId: string,
+  action: "accept" | "reject" | "undo",
+  adminToken: string
+) {
+  return request<UpdateLocationReviewResponse>(
+    `/admin/review-locations/${locationId}`,
+    {
+      method: "PATCH",
+      headers: getAdminHeaders(adminToken),
+      body: JSON.stringify({ action }),
+    }
+  );
+}
+
+export function deleteRejectedLocations(adminToken: string) {
+  return request<DeleteRejectedLocationsResponse>(
+    "/admin/review-locations/rejected",
+    {
+      method: "DELETE",
+      headers: getAdminHeaders(adminToken),
+    }
+  );
 }

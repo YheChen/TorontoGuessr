@@ -5,6 +5,9 @@ create table if not exists public.verified_locations (
   lat double precision not null,
   lng double precision not null,
   pano_id text,
+  manually_verified boolean not null default false,
+  review_status text not null default 'pending'
+    check (review_status in ('pending', 'rejected', 'accepted')),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -25,6 +28,9 @@ create table if not exists public.game_sessions (
 
 create index if not exists verified_locations_pano_id_idx
   on public.verified_locations (pano_id);
+
+create index if not exists verified_locations_review_queue_idx
+  on public.verified_locations (manually_verified, review_status, created_at);
 
 create index if not exists game_sessions_leaderboard_idx
   on public.game_sessions (status, total_score desc, completed_at desc);
