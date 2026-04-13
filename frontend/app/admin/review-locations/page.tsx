@@ -310,17 +310,61 @@ export default function ReviewLocationsPage() {
 
         {adminToken && currentEntry && (
           <div>
-            <div className="grid gap-6 xl:grid-cols-[1.55fr,1fr]">
-              <section className="rounded-lg border border-border/70 bg-card/90 p-4 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
-                <ReviewLocationPanorama
-                  key={`panorama-${currentEntry.id}`}
-                  panoId={currentEntry.panoId}
-                  location={{
-                    lat: currentEntry.lat,
-                    lng: currentEntry.lng,
-                  }}
-                />
-              </section>
+            <div className="grid items-start gap-6 xl:grid-cols-[1.55fr,1fr]">
+              <div className="space-y-4">
+                <section className="self-start rounded-lg border border-border/70 bg-card/90 p-4 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
+                  <ReviewLocationPanorama
+                    key={`panorama-${currentEntry.id}`}
+                    panoId={currentEntry.panoId}
+                    location={{
+                      lat: currentEntry.lat,
+                      lng: currentEntry.lng,
+                    }}
+                  />
+                </section>
+
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!queue?.hasPrevious || isMutating || isLoading}
+                    onClick={() => void handleMove(-1)}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isMutating || isLoading}
+                    onClick={() => void handleDecision("reject")}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isMutating || isLoading}
+                    onClick={() => void handleDecision("accept")}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!queue?.hasNext || isMutating || isLoading}
+                    onClick={() => void handleMove(1)}
+                  >
+                    Next
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!lastAction || isMutating || isLoading}
+                    onClick={() => void handleUndo()}
+                  >
+                    Undo Last Action
+                  </Button>
+                </div>
+              </div>
 
               <div className="space-y-6">
                 <section className="rounded-lg border border-border/70 bg-card/90 p-4 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
@@ -371,48 +415,6 @@ export default function ReviewLocationsPage() {
                   </CardContent>
                 </Card>
               </div>
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!queue?.hasPrevious || isMutating || isLoading}
-                onClick={() => void handleMove(-1)}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={isMutating || isLoading}
-                onClick={() => void handleDecision("reject")}
-              >
-                Reject
-              </Button>
-              <Button
-                type="button"
-                disabled={isMutating || isLoading}
-                onClick={() => void handleDecision("accept")}
-              >
-                Accept
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!queue?.hasNext || isMutating || isLoading}
-                onClick={() => void handleMove(1)}
-              >
-                Next
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!lastAction || isMutating || isLoading}
-                onClick={() => void handleUndo()}
-              >
-                Undo Last Action
-              </Button>
             </div>
           </div>
         )}
