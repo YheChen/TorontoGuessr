@@ -89,9 +89,20 @@ function getAdminHeaders(adminToken: string) {
   };
 }
 
-export function fetchLocationReviewQueue(index: number, adminToken: string) {
+export function fetchLocationReviewQueue(
+  index: number,
+  adminToken: string,
+  locationId?: string
+) {
+  const searchParams = new URLSearchParams({
+    index: String(index),
+  });
+  if (locationId) {
+    searchParams.set("locationId", locationId);
+  }
+
   return request<LocationReviewQueueResponse>(
-    `/admin/review-locations?index=${index}`,
+    `/admin/review-locations?${searchParams.toString()}`,
     {
       headers: getAdminHeaders(adminToken),
     }

@@ -220,34 +220,45 @@ export async function selectGameRounds(count = 5) {
   return rounds;
 }
 
-export async function getLocationReviewQueue({ index = 0 } = {}) {
-  const total = await countRows(VERIFIED_LOCATIONS_TABLE, {
-    filters: {
-      manually_verified: false,
-      review_status: REVIEW_STATUSES.PENDING,
-    },
-  });
-
-  const clampedIndex = total === 0 ? 0 : Math.min(index, total - 1);
-  const [entryRecord, rejectedCount] = await Promise.all([
-    total === 0
-      ? Promise.resolve(null)
-      : selectSingleRow(VERIFIED_LOCATIONS_TABLE, {
-          columns: VERIFIED_LOCATION_COLUMNS,
-          filters: {
-            manually_verified: false,
-            review_status: REVIEW_STATUSES.PENDING,
-          },
-          order: "created_at.asc",
-          offset: clampedIndex,
-        }),
+export async function getLocationReviewQueue({ index = 0, locationId = null } = {}) {
+  const pendingFilters = {
+    manually_verified: false,
+    review_status: REVIEW_STATUSES.PENDING,
+  };
+  const [total, rejectedCount, pendingRows] = await Promise.all([
+    countRows(VERIFIED_LOCATIONS_TABLE, {
+      filters: pendingFilters,
+    }),
     countRows(VERIFIED_LOCATIONS_TABLE, {
       filters: {
         manually_verified: false,
         review_status: REVIEW_STATUSES.REJECTED,
       },
     }),
+    locationId
+      ? selectRows(VERIFIED_LOCATIONS_TABLE, {
+          columns: "id",
+          filters: pendingFilters,
+          order: "created_at.asc",
+        })
+      : Promise.resolve([]),
   ]);
+
+  const resolvedIndex =
+    locationId && pendingRows.length > 0
+      ? pendingRows.findIndex((row) => row.id === locationId)
+      : -1;
+  const requestedIndex = resolvedIndex >= 0 ? resolvedIndex : index;
+  const clampedIndex = total === 0 ? 0 : Math.min(requestedIndex, total - 1);
+  const entryRecord =
+    total === 0
+      ? null
+      : await selectSingleRow(VERIFIED_LOCATIONS_TABLE, {
+          columns: VERIFIED_LOCATION_COLUMNS,
+          filters: pendingFilters,
+          order: "created_at.asc",
+          offset: clampedIndex,
+        });
 
   return {
     index: clampedIndex,

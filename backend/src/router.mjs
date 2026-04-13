@@ -46,6 +46,7 @@ const leaderboardQuerySchema = z.object({
 });
 const adminLocationReviewQuerySchema = z.object({
   index: z.coerce.number().int().min(0).default(0),
+  locationId: z.string().uuid().optional(),
 });
 const adminLocationReviewActionSchema = z.object({
   action: z.enum(["accept", "reject", "undo"]),
@@ -106,6 +107,7 @@ export async function routeRequest(request, response) {
       requireAdminToken(request);
       const query = adminLocationReviewQuerySchema.parse({
         index: url.searchParams.get("index") ?? undefined,
+        locationId: url.searchParams.get("locationId") ?? undefined,
       });
 
       sendJson(response, 200, await getLocationReviewQueue(query));

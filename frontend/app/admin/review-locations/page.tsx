@@ -59,7 +59,7 @@ export default function ReviewLocationsPage() {
 
   const currentEntry = queue?.entry ?? null;
 
-  const loadQueue = async (index: number, token: string) => {
+  const loadQueue = async (index: number, token: string, locationId?: string) => {
     if (!token) {
       return;
     }
@@ -68,7 +68,7 @@ export default function ReviewLocationsPage() {
     setErrorMessage(null);
 
     try {
-      const nextQueue = await fetchLocationReviewQueue(index, token);
+      const nextQueue = await fetchLocationReviewQueue(index, token, locationId);
       setQueue(nextQueue);
     } catch (error) {
       setQueue(null);
@@ -176,7 +176,7 @@ export default function ReviewLocationsPage() {
     try {
       await updateLocationReviewStatus(lastAction.locationId, "undo", adminToken);
       setStatusMessage("Last review action was undone.");
-      await loadQueue(lastAction.index, adminToken);
+      await loadQueue(lastAction.index, adminToken, lastAction.locationId);
       setLastAction(null);
     } catch (error) {
       setErrorMessage(
