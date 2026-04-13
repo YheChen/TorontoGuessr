@@ -245,11 +245,6 @@ export default function ReviewLocationsPage() {
           <Badge className="border-red-200 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-100">
             Rejected: {queue?.rejectedCount ?? 0}
           </Badge>
-          {queue && queue.total > 0 && (
-            <Badge variant="outline">
-              Reviewing {queue.index + 1} of {queue.total}
-            </Badge>
-          )}
           {currentEntry && (
             <Badge className={getStatusBadgeClass(currentEntry.reviewStatus)}>
               {getStatusLabel(currentEntry.reviewStatus)}
