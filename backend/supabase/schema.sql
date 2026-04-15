@@ -26,6 +26,9 @@ create table if not exists public.game_sessions (
   completed_at timestamptz
 );
 
+alter table public.verified_locations enable row level security;
+alter table public.game_sessions enable row level security;
+
 create index if not exists verified_locations_pano_id_idx
   on public.verified_locations (pano_id);
 

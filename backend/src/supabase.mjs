@@ -3,8 +3,7 @@ import { loadEnv } from "./env.mjs";
 loadEnv();
 
 const rawSupabaseUrl = process.env.SUPABASE_URL ?? null;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? null;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
 
 function getSupabaseBaseUrl() {
   if (!rawSupabaseUrl) {
@@ -16,9 +15,7 @@ function getSupabaseBaseUrl() {
 
 function getSupabaseKey() {
   if (!supabaseKey) {
-    throw new Error(
-      "Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY for backend."
-    );
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY for backend.");
   }
 
   return supabaseKey;

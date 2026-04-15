@@ -47,7 +47,11 @@ Players get five Toronto Street View rounds, place guesses on a map, and earn po
 
 4. For a fresh database, run [backend/supabase/schema.sql](backend/supabase/schema.sql) in the Supabase SQL editor.
 
+   This schema enables Row Level Security (RLS) on the app tables. The backend uses the Supabase `service_role` key, so it continues to work while anonymous access stays blocked by default.
+
    If you already had an older TorontoGuessr schema, also run [backend/supabase/add_verified_location_review_columns.sql](backend/supabase/add_verified_location_review_columns.sql) to add the manual review fields.
+
+   If Supabase is warning that RLS is disabled on an existing project, also run [backend/supabase/enable_row_level_security.sql](backend/supabase/enable_row_level_security.sql).
 
 5. Fill in `backend/.env` using [backend/.env.example](backend/.env.example):
 
@@ -95,6 +99,8 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 ```
 
 Do not use `NEXT_PUBLIC_SUPABASE_*` variables here. This app talks to Supabase from the backend, not from the browser.
+
+Because the public tables have RLS enabled, the backend should use `SUPABASE_SERVICE_ROLE_KEY`, not an anon key.
 
 ## Data Model
 
