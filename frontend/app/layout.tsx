@@ -1,6 +1,7 @@
 import type React from "react";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Github } from "lucide-react";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -35,8 +36,17 @@ export default function RootLayout({
           <div className="flex min-h-screen flex-col">
             <div className="flex flex-1 flex-col">{children}</div>
             <footer className="border-t border-border/70 bg-background text-muted-foreground shadow-sm backdrop-blur dark:border-none dark:bg-[#00205B] dark:text-blue-100/70 dark:shadow-md dark:backdrop-blur-none">
-              <div className="container mx-auto flex h-[72px] items-center justify-center px-4 text-center text-sm">
-                © 2026 Yanzhen Chen
+              <div className="container mx-auto flex h-[72px] flex-wrap items-center justify-center gap-4 px-4 text-center text-sm">
+                <span>© 2026 Yanzhen Chen</span>
+                <a
+                  href="https://github.com/YheChen"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 transition-colors hover:text-foreground dark:hover:text-white"
+                >
+                  <Github className="h-4 w-4" aria-hidden="true" />
+                  <span>GitHub</span>
+                </a>
               </div>
             </footer>
           </div>
