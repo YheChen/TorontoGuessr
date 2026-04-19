@@ -37,12 +37,17 @@ export default function Game() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState(1);
   const [totalRounds, setTotalRounds] = useState(5);
-  const [currentRoundData, setCurrentRoundData] =
-    useState<StartGameResponse["round"] | null>(null);
-  const [guessLocation, setGuessLocation] = useState<GuessLocation | null>(null);
+  const [currentRoundData, setCurrentRoundData] = useState<
+    StartGameResponse["round"] | null
+  >(null);
+  const [guessLocation, setGuessLocation] = useState<GuessLocation | null>(
+    null,
+  );
   const [gameState, setGameState] = useState<GameState>("loading");
   const [scores, setScores] = useState<GuessResponse[]>([]);
-  const [currentResult, setCurrentResult] = useState<GuessResponse | null>(null);
+  const [currentResult, setCurrentResult] = useState<GuessResponse | null>(
+    null,
+  );
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
@@ -189,7 +194,9 @@ export default function Game() {
       setGameState("guessing");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to load the next round.";
+        error instanceof Error
+          ? error.message
+          : "Failed to load the next round.";
       setErrorMessage(message);
       setGameState("error");
     }
@@ -307,11 +314,13 @@ export default function Game() {
 
             <div className="flex flex-col items-center gap-4">
               <div className="order-1 w-full max-w-sm space-y-2">
-                <p className="text-sm font-medium">Save score?</p>
+                <p className="text-sm font-medium">Save username?</p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={usernameInput}
-                    onChange={(event) => handleUsernameChange(event.target.value)}
+                    onChange={(event) =>
+                      handleUsernameChange(event.target.value)
+                    }
                     placeholder="Guest"
                     maxLength={10}
                     className="sm:flex-1"
@@ -322,12 +331,11 @@ export default function Game() {
                     disabled={isSavingScore}
                     className="sm:min-w-[120px]"
                   >
-                    {isSavingScore ? "Saving..." : "Save Score"}
+                    {isSavingScore ? "Saving..." : "Save Username"}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground dark:text-gray-400">
-                  Letters and numbers only, up to 10 characters. Leave it blank
-                  for Guest.
+                  Letters and numbers only, up to 10 characters.
                 </p>
                 {saveMessage && (
                   <p className="text-sm text-emerald-600 dark:text-emerald-400">
