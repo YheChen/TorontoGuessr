@@ -9,7 +9,7 @@ Players get five Toronto Street View rounds, place guesses on a map, and earn po
 - `frontend/`: Next.js 15 App Router app
 - `backend/`: small Node API used locally and in Vercel Functions
 - Supabase: verified location cache, game sessions, leaderboard data
-- Google Maps / Street View: gameplay map, Street View rendering, review tooling
+- Google Maps / Google Street View: gameplay map, Street View rendering, review tooling
 
 ## Repo Layout
 
