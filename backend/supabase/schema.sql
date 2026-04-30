@@ -14,7 +14,7 @@ create table if not exists public.verified_locations (
 
 create table if not exists public.game_sessions (
   id uuid primary key,
-  username text not null default 'Guest',
+  username text not null default ('Guest ' || lpad(floor(random() * 10000)::text, 4, '0')),
   rounds jsonb not null,
   current_round_index integer not null default 0,
   total_rounds integer not null,

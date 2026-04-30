@@ -25,7 +25,7 @@ const LEADERBOARD_OPTIONS: Array<{
   {
     value: "lifetime",
     label: "Lifetime",
-    description: "Best scores across every finished game",
+    description: "Scores across all finished games",
   },
   {
     value: "daily",
@@ -186,10 +186,7 @@ export default function Leaderboard() {
       <div className="container mx-auto max-w-5xl px-4 py-10">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.12em] text-primary">
-              Toronto Records
-            </p>
-            <h1 className="mt-2 text-3xl font-bold">Leaderboard</h1>
+            <h1 className="text-3xl font-bold">Leaderboard</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               {activeOption.description}
             </p>
@@ -290,10 +287,7 @@ export default function Leaderboard() {
                         {entry.username}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {rank === 1
-                          ? "Top score"
-                          : `${activeOption.label} contender`}{" "}
-                        · Completed{" "}
+                        Completed{" "}
                         {completedAtFormatter.format(new Date(entry.completedAt))}
                       </p>
                     </div>

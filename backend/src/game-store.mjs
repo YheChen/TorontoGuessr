@@ -7,7 +7,10 @@ import {
   selectSingleRow,
   updateSingleRow,
 } from "./supabase.mjs";
-import { DEFAULT_USERNAME } from "./username-utils.mjs";
+import {
+  createGuestUsername,
+  resolveDefaultUsername,
+} from "./username-utils.mjs";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
 const GAME_SESSION_COLUMNS =
@@ -55,7 +58,7 @@ function buildRoundPayload(session) {
 function mapSessionRecord(record) {
   return {
     id: record.id,
-    username: record.username ?? DEFAULT_USERNAME,
+    username: resolveDefaultUsername(record.username, record.id),
     rounds: Array.isArray(record.rounds) ? record.rounds : [],
     currentRoundIndex: record.current_round_index,
     totalRounds: record.total_rounds,
@@ -165,7 +168,7 @@ async function requireGameSession(sessionId) {
 export async function createGameSession(rounds) {
   const session = {
     id: randomUUID(),
-    username: DEFAULT_USERNAME,
+    username: createGuestUsername(),
     rounds,
     currentRoundIndex: 0,
     totalRounds: rounds.length,
@@ -306,7 +309,7 @@ export async function saveUsername(sessionId, username) {
 
   return {
     id: updatedRecord.id,
-    username: updatedRecord.username ?? DEFAULT_USERNAME,
+    username: resolveDefaultUsername(updatedRecord.username, updatedRecord.id),
   };
 }
 
@@ -336,7 +339,7 @@ export async function getLeaderboard({
 
   const entries = records.map((record) => ({
     id: record.id,
-    username: record.username ?? DEFAULT_USERNAME,
+    username: resolveDefaultUsername(record.username, record.id),
     totalScore: record.total_score,
     roundsPlayed: record.rounds_played ?? 0,
     completedAt: record.completed_at,

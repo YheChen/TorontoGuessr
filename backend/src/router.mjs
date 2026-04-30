@@ -133,6 +133,7 @@ export async function routeRequest(request, response) {
 
       sendJson(response, 200, {
         sessionId: session.id,
+        username: session.username,
         ...payload,
       });
       return;

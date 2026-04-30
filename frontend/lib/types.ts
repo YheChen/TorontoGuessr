@@ -12,6 +12,7 @@ export interface RoundPayload {
 
 export interface StartGameResponse {
   sessionId: string;
+  username: string;
   currentRound: number;
   totalRounds: number;
   round: RoundPayload;

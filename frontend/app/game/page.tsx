@@ -51,7 +51,7 @@ export default function Game() {
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
-  const [savedUsername, setSavedUsername] = useState("Guest");
+  const [savedUsername, setSavedUsername] = useState("Guest 0000");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [isSavingScore, setIsSavingScore] = useState(false);
@@ -62,7 +62,7 @@ export default function Game() {
     setGameState("loading");
     setErrorMessage(null);
     setUsernameInput("");
-    setSavedUsername("Guest");
+    setSavedUsername("Guest 0000");
     setSaveMessage(null);
     setSaveErrorMessage(null);
     setIsSavingScore(false);
@@ -70,6 +70,7 @@ export default function Game() {
     try {
       const game = await startGameRequest();
       setSessionId(game.sessionId);
+      setSavedUsername(game.username);
       setCurrentRound(game.currentRound);
       setTotalRounds(game.totalRounds);
       setCurrentRoundData(game.round);
@@ -321,7 +322,7 @@ export default function Game() {
                     onChange={(event) =>
                       handleUsernameChange(event.target.value)
                     }
-                    placeholder="Guest"
+                    placeholder={savedUsername}
                     maxLength={10}
                     className="sm:flex-1"
                   />
