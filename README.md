@@ -2,7 +2,7 @@
 
 TorontoGuessr is a Toronto-only Street View guessing game with a Next.js frontend, a small Node backend, and Supabase for persistence.
 
-Players get five Toronto Street View rounds, place guesses on a map, and earn points based on geographic accuracy. The app also includes leaderboards, daily gameplay stats, SEO metadata routes, and an admin review tool for manually approving or rejecting cached Street View locations.
+Players get five Toronto Street View locations, place guesses on a map, and earn points based on geographic accuracy. The app also includes leaderboards, daily gameplay stats, SEO metadata routes, and an admin review tool for manually approving or rejecting cached Street View locations.
 
 ## Stack
 
