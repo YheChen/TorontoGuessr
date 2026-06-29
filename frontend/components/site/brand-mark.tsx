@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Drop a logo image at this public path to replace the built-in glyph.
- * PNG (transparent) or SVG both work, just match this filename.
+ * Transparent (background-removed) CN Tower line-art served from /public.
+ * Rendered black on light surfaces and inverted to white in dark mode.
+ * Falls back to the built-in glyph if the file is missing.
  */
-const LOGO_SRC = "/cn-tower-logo.png";
+const LOGO_SRC = "/cntower-mark.png";
+const LOGO_RATIO = 66 / 250; // intrinsic width / height of the trimmed mark
 
 interface BrandMarkProps {
   className?: string;
@@ -47,10 +49,10 @@ export function BrandMark({
         <img
           src={LOGO_SRC}
           alt=""
-          width={size}
+          width={Math.round(size * LOGO_RATIO)}
           height={size}
-          style={{ width: size, height: size }}
-          className="shrink-0 select-none object-contain"
+          style={{ height: size, width: "auto" }}
+          className="shrink-0 select-none object-contain dark:invert"
           aria-hidden="true"
         />
       ) : (

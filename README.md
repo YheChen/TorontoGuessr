@@ -15,11 +15,12 @@ Players get five Toronto Street View locations, place guesses on a map, and earn
 
 The frontend uses a custom design system ("Cartographic Premium") built on Tailwind CSS and a small set of reusable components.
 
-- **Theming:** semantic HSL design tokens drive both a cool paper-white light theme and a deep-navy dark theme (the default). Toronto brand accents (navy, azure, sky, red, gold) live in dedicated tokens. Toggle themes from the navbar.
-- **Toronto identity:** an ambient backdrop layers a cartographic grid, a soft azure spotlight, and a stylized Toronto skyline with a CN Tower-inspired logo mark, understated, not touristy.
+- **Theming:** semantic HSL design tokens drive both a cool paper-white light theme and a deep-navy dark theme (the default). Toronto brand accents (navy, azure, sky, red, gold) live in dedicated tokens. A floating control in the bottom-right corner toggles the site between light and dark.
+- **Toronto identity:** an ambient backdrop layers a cartographic grid, a soft azure spotlight, and color blooms, with a Toronto skyline anchoring the footer and a CN Tower-inspired logo mark, understated, not touristy. Drop a `cn-tower-logo.png` or `toronto-skyline.png` into `frontend/public/` to swap in your own art; the built-in vector versions are used otherwise.
 - **Map-first gameplay:** an immersive Street View stage with a floating glass HUD (round, score, animated timer ring) and a floating guess panel; round and final results animate scores with count-ups and reveal transitions.
+- **Readable maps:** the guess and results maps have their own light/dark appearance, independent of the site theme and toggled from a button on the map (remembered across sessions), so the map stays legible in either mode.
 - **Shared components:** global chrome (`AppShell`, `Navbar`, `Footer`, `TorontoBackdrop`) plus building blocks (`SectionHeading`, `StatCard`, `Reveal`, `CountUp`, `Spinner`, `LoadingScreen`, `EmptyState`, `ErrorCard`, `GameHUD`, `GuessPanel`, `LeaderboardPodium`) live in `frontend/components/site/` and `frontend/components/`.
-- **Accessibility & motion:** semantic HTML, labeled controls, visible focus rings, and a global `prefers-reduced-motion` guard that disables animations for users who opt out.
+- **Accessibility & motion:** semantic HTML, labeled controls, a skip-to-content link, visible focus rings, and a global `prefers-reduced-motion` guard that disables animations for users who opt out.
 - **Responsive:** every page is tuned for desktop, tablet, and mobile, including a stacked mobile gameplay layout that keeps Street View and the guess map usable on small screens.
 
 Gameplay, scoring, leaderboards, statistics, authentication, the admin review workflow, and all backend APIs are unchanged. This was a presentation-layer redesign.
