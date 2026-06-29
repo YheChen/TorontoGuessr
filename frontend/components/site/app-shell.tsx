@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Global chrome: ambient Toronto backdrop, sticky navbar, the page content,
- * and the footer — composed once so individual pages only render content.
+ * and the footer, composed once so individual pages only render content.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
-  TorontoGuessr design system — "Cartographic Premium"
+  TorontoGuessr design system: "Cartographic Premium"
   Deep-navy, map-first surfaces with an azure interactive accent and a
   restrained Toronto-red highlight. Dark is the default canvas; light is a
   cool, paper-white companion. All shadcn semantic tokens stay neutral-cool so
@@ -55,7 +55,7 @@
     --toronto-red: 351 80% 45%;
     --gold: 41 96% 52%;
 
-    /* Medal colors — tuned to stay readable as text on light surfaces */
+    /* Medal colors: tuned to stay readable as text on light surfaces */
     --medal-gold: 38 92% 32%;
     --medal-silver: 215 16% 40%;
     --medal-bronze: 26 58% 36%;
@@ -104,7 +104,7 @@
     --toronto-red: 351 84% 58%;
     --gold: 41 96% 58%;
 
-    /* Medal colors — bright enough to read on the dark canvas */
+    /* Medal colors: bright enough to read on the dark canvas */
     --medal-gold: 41 96% 60%;
     --medal-silver: 214 18% 74%;
     --medal-bronze: 28 72% 62%;

@@ -215,7 +215,7 @@ export default function ReviewLocationsPage() {
       value:
         queue && currentEntry
           ? `${queue.index + 1} / ${queue.total}`
-          : "—",
+          : "-",
       icon: Hash,
       tone: "bg-secondary text-secondary-foreground",
     },

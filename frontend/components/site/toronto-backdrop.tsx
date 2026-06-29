@@ -1,9 +1,7 @@
-import { Skyline } from "@/components/site/skyline";
-
 /**
  * Fixed, non-interactive ambience layer behind the whole app:
- * a base wash, a cartographic grid, a soft azure spotlight, two color
- * blooms, and a faint Toronto skyline anchored to the bottom.
+ * a base wash, a cartographic grid, a soft azure spotlight, and two color
+ * blooms. The Toronto skyline lives in the footer (see FooterBackdrop).
  */
 export function TorontoBackdrop() {
   return (
@@ -31,11 +29,6 @@ export function TorontoBackdrop() {
       {/* color blooms */}
       <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-toronto-azure/15 blur-3xl dark:bg-toronto-azure/20" />
       <div className="absolute -right-20 top-1/3 h-80 w-80 rounded-full bg-toronto-red/10 blur-3xl dark:bg-toronto-red/10" />
-
-      {/* skyline anchored at the bottom */}
-      <div className="absolute inset-x-0 bottom-0 text-toronto-navy/[0.07] dark:text-white/[0.04]">
-        <Skyline className="h-40 sm:h-52" />
-      </div>
     </div>
   );
 }

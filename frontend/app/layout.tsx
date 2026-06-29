@@ -18,7 +18,7 @@ const siteUrl = getSiteUrl();
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "TorontoGuessr — How well do you know the 6ix?",
+    default: "TorontoGuessr: How well do you know the 6ix?",
     template: "%s · TorontoGuessr",
   },
   description:
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: siteUrl,
-    title: "TorontoGuessr — How well do you know the 6ix?",
+    title: "TorontoGuessr: How well do you know the 6ix?",
     description:
       "Drop into Toronto Street View, read the city, and pin your guess across five rounds.",
     siteName: "TorontoGuessr",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "TorontoGuessr — How well do you know the 6ix?",
+    title: "TorontoGuessr: How well do you know the 6ix?",
     description:
       "Drop into Toronto Street View, read the city, and pin your guess across five rounds.",
     images: ["/TorontoGuessrThumbnail.webp"],

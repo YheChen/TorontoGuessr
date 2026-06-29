@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * A stylized, static preview of the in-game experience for the landing hero.
- * Decorative only — it never loads Google Maps, keeping the homepage light.
+ * Decorative only: it never loads Google Maps, keeping the homepage light.
  */
 export function GameplayPreview({ className }: { className?: string }) {
   return (

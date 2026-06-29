@@ -176,7 +176,7 @@ export default function Leaderboard() {
       ? `Top ${entries.length} of ${totalEntries} score${
           totalEntries === 1 ? "" : "s"
         }`
-      : `Showing ${showingFrom}–${showingTo} of ${totalEntries} score${
+      : `Showing ${showingFrom}-${showingTo} of ${totalEntries} score${
           totalEntries === 1 ? "" : "s"
         }`;
 
@@ -252,7 +252,7 @@ export default function Leaderboard() {
           <EmptyState
             icon={Trophy}
             title="No scores yet"
-            description={`Be the first to set a ${activeOption.label.toLowerCase()} score — finish a game and save your name.`}
+            description={`Be the first to set a ${activeOption.label.toLowerCase()} score. Finish a game and save your name.`}
             action={
               <Button asChild className="mt-1 rounded-xl">
                 <Link href="/game">

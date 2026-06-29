@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Github, MapPin } from "lucide-react";
 import { BrandMark } from "@/components/site/brand-mark";
+import { FooterBackdrop } from "@/components/site/footer-backdrop";
 
 const FOOTER_LINKS: Array<{
   title: string;
@@ -24,8 +25,9 @@ const FOOTER_LINKS: Array<{
 
 export function Footer() {
   return (
-    <footer className="relative mt-auto border-t border-border/70">
-      <div className="container py-12">
+    <footer className="relative mt-auto overflow-hidden border-t border-border/70">
+      <FooterBackdrop />
+      <div className="container relative z-10 py-12">
         <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           <div className="max-w-sm">
             <BrandMark withWordmark size={36} wordmarkClassName="text-xl" />

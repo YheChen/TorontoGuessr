@@ -1,8 +1,17 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Drop a logo image at this public path to replace the built-in glyph.
+ * PNG (transparent) or SVG both work, just match this filename.
+ */
+const LOGO_SRC = "/cn-tower-logo.png";
 
 interface BrandMarkProps {
   className?: string;
-  /** Size of the square logo tile in pixels. */
+  /** Size of the square logo in pixels. */
   size?: number;
   withWordmark?: boolean;
   /** Tailwind text size class for the wordmark. */
@@ -10,8 +19,9 @@ interface BrandMarkProps {
 }
 
 /**
- * CN Tower–inspired logo glyph rendered inside a rounded gradient tile,
- * optionally followed by the TorontoGuessr wordmark.
+ * Brand logo: uses a custom image at {@link LOGO_SRC} when available, otherwise
+ * falls back to the built-in CN Tower glyph in a gradient tile. Optionally
+ * followed by the TorontoGuessr wordmark.
  */
 export function BrandMark({
   className,
@@ -19,15 +29,39 @@ export function BrandMark({
   withWordmark = false,
   wordmarkClassName,
 }: BrandMarkProps) {
+  // Default to the built-in glyph and only swap in the custom image once it has
+  // verifiably loaded, so a missing file never flashes a broken-image icon.
+  const [hasLogo, setHasLogo] = useState(false);
+
+  useEffect(() => {
+    const probe = new window.Image();
+    probe.onload = () => setHasLogo(true);
+    probe.onerror = () => setHasLogo(false);
+    probe.src = LOGO_SRC;
+  }, []);
+
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <span
-        className="relative grid shrink-0 place-items-center rounded-[30%] bg-gradient-to-br from-toronto-azure to-toronto-sky text-white shadow-glow ring-1 ring-inset ring-white/20"
-        style={{ width: size, height: size }}
-        aria-hidden="true"
-      >
-        <TowerGlyph className="h-[62%] w-[62%]" />
-      </span>
+      {hasLogo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={LOGO_SRC}
+          alt=""
+          width={size}
+          height={size}
+          style={{ width: size, height: size }}
+          className="shrink-0 select-none object-contain"
+          aria-hidden="true"
+        />
+      ) : (
+        <span
+          className="relative grid shrink-0 place-items-center rounded-[30%] bg-gradient-to-br from-toronto-azure to-toronto-sky text-white shadow-glow ring-1 ring-inset ring-white/20"
+          style={{ width: size, height: size }}
+          aria-hidden="true"
+        >
+          <TowerGlyph className="h-[62%] w-[62%]" />
+        </span>
+      )}
       {withWordmark && (
         <span
           className={cn(
@@ -42,7 +76,7 @@ export function BrandMark({
   );
 }
 
-/** Minimal stylized CN Tower mark. */
+/** Minimal stylized CN Tower mark (fallback when no logo image is provided). */
 export function TowerGlyph({ className }: { className?: string }) {
   return (
     <svg

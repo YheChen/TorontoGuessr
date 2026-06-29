@@ -23,13 +23,13 @@ const FEATURES = [
     icon: Eye,
     title: "Real Street View",
     description:
-      "Authentic 360° panoramas pulled straight from Toronto's streets — pan, zoom, and explore for clues.",
+      "Authentic 360° panoramas pulled straight from Toronto's streets. Pan, zoom, and explore for clues.",
   },
   {
     icon: Crosshair,
     title: "Pin your guess",
     description:
-      "Click the map to drop your marker. The closer you land, the more you score — up to 5,000 points a round.",
+      "Click the map to drop your marker. The closer you land, the more you score, up to 5,000 points a round.",
   },
   {
     icon: Trophy,
@@ -77,7 +77,7 @@ export default function Home() {
 
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
               Drop into a random Toronto street, read the signs, skyline, and
-              storefronts — then pin your best guess. Five rounds, one city,
+              storefronts, then pin your best guess. Five rounds, one city,
               pure local knowledge.
             </p>
 
@@ -252,7 +252,7 @@ export default function Home() {
               Ready to test your local knowledge?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
-              Jump into a fresh five-round game. No account, no setup — just you
+              Jump into a fresh five-round game. No account, no setup, just you
               and the streets of Toronto.
             </p>
             <div className="mt-8 flex justify-center">

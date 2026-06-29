@@ -17,14 +17,14 @@ import { SectionHeading } from "@/components/site/section-heading";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "How TorontoGuessr works — gameplay, scoring, the neighborhoods, and the tech behind the game.",
+    "How TorontoGuessr works: gameplay, scoring, the neighborhoods, and the tech behind the game.",
 };
 
 const STEPS = [
   {
     icon: Eye,
     title: "Explore the panorama",
-    body: "Each round drops you into a real Toronto Street View. Pan, zoom, and look for clues — signage, transit, storefronts, and skyline.",
+    body: "Each round drops you into a real Toronto Street View. Pan, zoom, and look for clues: signage, transit, storefronts, and skyline.",
   },
   {
     icon: Crosshair,
@@ -34,7 +34,7 @@ const STEPS = [
   {
     icon: Target,
     title: "Score by distance",
-    body: "The closer your pin lands to the real spot, the more you score — up to 5,000 points per round.",
+    body: "The closer your pin lands to the real spot, the more you score, up to 5,000 points per round.",
   },
   {
     icon: Trophy,
@@ -179,7 +179,7 @@ export default function About() {
           </div>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             The game focuses on downtown Toronto and the surrounding
-            neighborhoods — each with its own architecture, signage, and street
+            neighborhoods, each with its own architecture, signage, and street
             life to read.
           </p>
           <ul className="mt-5 flex flex-wrap gap-2.5">
