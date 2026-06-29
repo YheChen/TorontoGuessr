@@ -163,43 +163,6 @@ Review behavior:
 
 Admin access is protected by `ADMIN_REVIEW_TOKEN`, which must be sent to the backend through the review UI.
 
-## Verified Location Migration
-
-If you already migrated verified locations into Supabase, you can skip this section.
-
-The one-time migration script is [backend/scripts/migrate-verified-locations-from-firestore.mjs](backend/scripts/migrate-verified-locations-from-firestore.mjs).
-
-What it does:
-
-- reads Firestore `verifiedLocations`
-- validates existing coordinates against Google Street View when needed
-- inserts verified rows into Supabase `verified_locations`
-- does not generate new random coordinates
-
-To run it:
-
-1. Temporarily install Firebase in the backend workspace:
-
-   ```bash
-   npm install --prefix backend --no-save firebase
-   ```
-
-2. Add the Firebase env vars shown in [backend/.env.example](backend/.env.example) to `backend/.env`.
-
-3. Run the migration:
-
-   ```bash
-   npm run migrate:verified-locations --workspace backend
-   ```
-
-4. After Supabase is seeded, keep this in `backend/.env`:
-
-   ```env
-   LOCATION_GENERATION_ENABLED=false
-   ```
-
-With generation disabled, the backend will not create new random Toronto coordinates at runtime.
-
 ## Verified Location Generation
 
 There are now two ways verified locations can be added:
@@ -256,7 +219,6 @@ Workspace-specific:
 - `npm run dev --workspace frontend`
 - `npm run dev --workspace backend`
 - `npm run generate:verified-locations --workspace backend`
-- `npm run migrate:verified-locations --workspace backend`
 
 ## API
 
@@ -337,6 +299,4 @@ Right now the repo can use the same Google key on both frontend and backend, but
 
 ## Notes
 
-- Firebase is no longer used for normal runtime.
-- Old Firestore credentials are only needed for the one-time migration script.
-- The frontend still needs a Google Maps API key even after the Supabase migration because gameplay and review tooling both use Google Maps and Street View.
+- The frontend always needs a Google Maps API key because gameplay and review tooling both use Google Maps and Street View.
