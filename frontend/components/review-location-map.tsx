@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { useJsApiLoader } from "@react-google-maps/api";
-import { Card } from "@/components/ui/card";
+import { MapPinOff } from "lucide-react";
+import { Spinner } from "@/components/site/spinner";
 
 interface ReviewLocationMapProps {
   location: {
@@ -10,11 +11,6 @@ interface ReviewLocationMapProps {
     lng: number;
   };
 }
-
-const containerStyle = {
-  width: "100%",
-  height: "360px",
-};
 
 export function ReviewLocationMap({ location }: ReviewLocationMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
@@ -50,7 +46,8 @@ export function ReviewLocationMap({ location }: ReviewLocationMapProps) {
 
   if (loadError) {
     return (
-      <div className="rounded-lg border border-border/70 bg-card/90 p-4 text-sm text-muted-foreground shadow-md dark:border-transparent dark:bg-black dark:text-white">
+      <div className="flex h-[300px] flex-col items-center justify-center gap-3 rounded-2xl bg-muted/40 p-6 text-center text-sm text-muted-foreground ring-1 ring-border/60">
+        <MapPinOff className="size-6" />
         Google Maps failed to load for the review map.
       </div>
     );
@@ -58,15 +55,15 @@ export function ReviewLocationMap({ location }: ReviewLocationMapProps) {
 
   if (!isLoaded) {
     return (
-      <div className="rounded-lg border border-border/70 bg-card/90 p-4 text-sm text-muted-foreground shadow-md dark:border-transparent dark:bg-black dark:text-white">
-        Loading map...
+      <div className="flex h-[300px] items-center justify-center rounded-2xl bg-muted/40 ring-1 ring-border/60">
+        <Spinner size={26} />
       </div>
     );
   }
 
   return (
-    <Card className="overflow-hidden border-border/70 bg-card/95 shadow-md dark:bg-gray-800">
-      <div ref={mapRef} style={containerStyle} />
-    </Card>
+    <div className="h-[300px] w-full overflow-hidden rounded-2xl ring-1 ring-border/60">
+      <div ref={mapRef} className="h-full w-full" />
+    </div>
   );
 }

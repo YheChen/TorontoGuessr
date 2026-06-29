@@ -2,67 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  TorontoGuessr design system — "Cartographic Premium"
+  Deep-navy, map-first surfaces with an azure interactive accent and a
+  restrained Toronto-red highlight. Dark is the default canvas; light is a
+  cool, paper-white companion. All shadcn semantic tokens stay neutral-cool so
+  existing primitives keep working, while brand colors live in dedicated vars.
+*/
+
 @layer base {
   :root {
-    --background: 204 100% 97%;
-    --foreground: 215 43% 17%;
+    /* Surfaces */
+    --background: 210 38% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 43% 17%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 43% 17%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 210 78% 36%;
-    --primary-foreground: 210 40% 98%;
+    /* Interactive / brand */
+    --primary: 214 88% 48%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 197 72% 92%;
-    --secondary-foreground: 215 43% 22%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 217 40% 22%;
 
-    --muted: 200 47% 94%;
-    --muted-foreground: 215 16% 38%;
+    --muted: 214 30% 95%;
+    --muted-foreground: 216 16% 44%;
 
-    --accent: 191 74% 89%;
-    --accent-foreground: 213 56% 24%;
+    --accent: 213 60% 94%;
+    --accent-foreground: 215 50% 22%;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 205 45% 84%;
-    --input: 205 45% 86%;
-    --ring: 199 92% 48%;
+    --success: 152 64% 30%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    /* Lines & focus */
+    --border: 214 28% 89%;
+    --input: 214 28% 87%;
+    --ring: 214 88% 48%;
+
+    --radius: 0.85rem;
+
+    /* Brand accents (used directly, not via shadcn semantics) */
+    --toronto-navy: 217 100% 18%;
+    --toronto-azure: 214 88% 48%;
+    --toronto-sky: 202 92% 56%;
+    --toronto-red: 351 80% 45%;
+    --gold: 41 96% 52%;
+
+    /* Medal colors — tuned to stay readable as text on light surfaces */
+    --medal-gold: 38 92% 32%;
+    --medal-silver: 215 16% 40%;
+    --medal-bronze: 26 58% 36%;
+
+    /* Decorative */
+    --grid-line: 214 40% 84%;
+    --glow: 214 90% 60%;
+    --surface-shimmer: 214 60% 96%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 218 46% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 217 40% 11%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 217 42% 10%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 211 92% 60%;
+    --primary-foreground: 218 60% 8%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 217 34% 16%;
+    --secondary-foreground: 210 40% 96%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 217 32% 15%;
+    --muted-foreground: 215 22% 68%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 213 60% 18%;
+    --accent-foreground: 210 40% 96%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --success: 152 58% 46%;
+    --success-foreground: 152 80% 6%;
+
+    --border: 216 34% 18%;
+    --input: 216 34% 20%;
+    --ring: 211 92% 60%;
+
+    --toronto-navy: 217 100% 16%;
+    --toronto-azure: 211 92% 60%;
+    --toronto-sky: 200 94% 62%;
+    --toronto-red: 351 84% 58%;
+    --gold: 41 96% 58%;
+
+    /* Medal colors — bright enough to read on the dark canvas */
+    --medal-gold: 41 96% 60%;
+    --medal-silver: 214 18% 74%;
+    --medal-bronze: 28 72% 62%;
+
+    --grid-line: 214 40% 26%;
+    --glow: 211 92% 60%;
+    --surface-shimmer: 217 40% 18%;
   }
 }
 
@@ -71,22 +120,260 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
   ::selection {
-    background-color: hsl(var(--accent));
-    color: hsl(var(--accent-foreground));
+    background-color: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
   }
 
   body {
-    @apply text-foreground transition-colors duration-300;
-    background-color: hsl(var(--background));
-    background-image: linear-gradient(
-      180deg,
-      hsl(204 100% 98%) 0%,
-      hsl(196 100% 95%) 100%
-    );
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100vh;
   }
 
-  .dark body {
-    background-image: none;
+  /* Numeric tabular feel for scores / coordinates / timers */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .font-mono-accent {
+    font-family: var(--font-mono, ui-monospace, "SF Mono", SFMono-Regular,
+        "Roboto Mono", Menlo, Consolas, monospace);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Refined focus ring everywhere */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--background)),
+      0 0 0 4px hsl(var(--ring) / 0.65);
+    border-radius: var(--radius);
+  }
+
+  /* Custom scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.32);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.55);
+  }
+}
+
+@layer components {
+  /* Layered glass surface used by floating panels / HUD */
+  .glass {
+    background-color: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid hsl(var(--border) / 0.8);
+  }
+
+  .glass-strong {
+    background-color: hsl(var(--card) / 0.86);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid hsl(var(--border) / 0.9);
+  }
+
+  /* Premium elevated card */
+  .surface-card {
+    background:
+      linear-gradient(
+        180deg,
+        hsl(var(--card)) 0%,
+        hsl(var(--card) / 0.92) 100%
+      );
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 1px 0 0 hsl(var(--foreground) / 0.02) inset,
+      0 1px 2px hsl(220 40% 10% / 0.04),
+      0 8px 24px -12px hsl(220 40% 10% / 0.18);
+  }
+  .dark .surface-card {
+    box-shadow:
+      0 1px 0 0 hsl(0 0% 100% / 0.04) inset,
+      0 2px 6px hsl(0 0% 0% / 0.3),
+      0 16px 40px -16px hsl(0 0% 0% / 0.6);
+  }
+
+  /* Soft brand gradient text */
+  .text-gradient {
+    background: linear-gradient(
+      120deg,
+      hsl(var(--toronto-azure)),
+      hsl(var(--toronto-sky))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Hairline divider */
+  .hairline {
+    border-color: hsl(var(--border) / 0.7);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Cartographic grid texture for backgrounds */
+  .bg-map-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--grid-line) / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--grid-line) / 0.5) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+  .bg-map-grid-fine {
+    background-image:
+      linear-gradient(to right, hsl(var(--grid-line) / 0.35) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--grid-line) / 0.35) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Radial spotlight glow */
+  .bg-spotlight {
+    background:
+      radial-gradient(
+        60% 50% at 50% 0%,
+        hsl(var(--glow) / 0.16) 0%,
+        transparent 70%
+      );
+  }
+
+  /* Animation entrances */
+  .animate-fade-up {
+    animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.5s ease both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-marker-drop {
+    animation: marker-drop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .animate-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  .animate-pulse-ring {
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Stagger helpers */
+  .delay-75 { animation-delay: 75ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-225 { animation-delay: 225ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-450 { animation-delay: 450ms; }
+  .delay-600 { animation-delay: 600ms; }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes marker-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--toronto-red) / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 12px hsl(var(--toronto-red) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--toronto-red) / 0);
+  }
+}
+
+/* Respect reduced motion across the board */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

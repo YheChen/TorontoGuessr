@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { Spinner } from "@/components/site/spinner";
 
 interface Props {
   panoId: string;
@@ -24,41 +25,47 @@ export default function GamePanorama({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
-
-    if (isLoaded && streetViewRef.current) {
-      setLoaded(false);
-
-      timeout = setTimeout(() => {
-        new google.maps.StreetViewPanorama(streetViewRef.current!, {
-          pano: panoId,
-          pov: {
-            heading,
-            pitch,
-          },
-          zoom,
-          disableDefaultUI: true,
-          showRoadLabels: false,
-        });
-        setLoaded(true);
-      }, 1000);
+    if (!isLoaded || !streetViewRef.current) {
+      return;
     }
 
-    return () => clearTimeout(timeout);
+    setLoaded(false);
+    const node = streetViewRef.current;
+    node.innerHTML = "";
+
+    const panorama = new google.maps.StreetViewPanorama(node, {
+      pano: panoId,
+      pov: { heading, pitch },
+      zoom,
+      disableDefaultUI: true,
+      showRoadLabels: false,
+    });
+
+    // Hide the overlay as soon as the panorama reports it has imagery, rather
+    // than after an arbitrary delay. A fallback guarantees it never sticks.
+    const listener = panorama.addListener("pano_changed", () =>
+      setLoaded(true),
+    );
+    const fallback = setTimeout(() => setLoaded(true), 1200);
+
+    return () => {
+      listener.remove();
+      clearTimeout(fallback);
+      node.innerHTML = "";
+    };
   }, [heading, isLoaded, panoId, pitch, zoom]);
 
-  if (!isLoaded) {
-    return <div className="bg-black p-4 text-white">Loading Google Maps...</div>;
-  }
-
   return (
-    <div style={{ height: "600px", width: "100%", position: "relative" }}>
-      {!loaded && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white">
-          Loading Street View...
+    <div className="relative h-full min-h-[320px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60">
+      {(!isLoaded || !loaded) && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 text-white backdrop-blur-sm">
+          <Spinner size={32} />
+          <p className="text-sm font-medium text-white/80">
+            {isLoaded ? "Loading Street View…" : "Loading Google Maps…"}
+          </p>
         </div>
       )}
-      <div ref={streetViewRef} style={{ height: "100%", width: "100%" }} />
+      <div ref={streetViewRef} className="h-full w-full" />
     </div>
   );
 }

@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import Header from "@/components/Header";
-import { GameControls } from "@/components/game-controls";
-import { GameMap } from "@/components/game-map";
-import { GameProgress } from "@/components/game-progress";
+import { Trophy, RotateCcw, Save, Check, Flag } from "lucide-react";
+import { GameHUD } from "@/components/game-hud";
+import { GuessPanel } from "@/components/guess-panel";
 import GamePanorama from "@/components/gamepanorama";
 import { GameResults } from "@/components/game-results";
+import { LoadingScreen, ErrorCard } from "@/components/site/states";
+import { CountUp } from "@/components/site/count-up";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   fetchNextRound,
   saveScoreUsername,
@@ -33,6 +34,15 @@ type GameState =
   | "summary"
   | "error";
 
+const MAX_ROUND_SCORE = 5000;
+
+function tierBarColor(score: number): string {
+  if (score >= 4000) return "bg-success";
+  if (score >= 2000) return "bg-primary";
+  if (score > 0) return "bg-toronto-gold";
+  return "bg-muted-foreground/40";
+}
+
 export default function Game() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState(1);
@@ -49,6 +59,7 @@ export default function Game() {
     null,
   );
   const [timeRemaining, setTimeRemaining] = useState(60);
+  const [timeLimit, setTimeLimit] = useState(60);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
   const [savedUsername, setSavedUsername] = useState("Guest 0000");
@@ -78,6 +89,7 @@ export default function Game() {
       setScores([]);
       setCurrentResult(null);
       setTimeRemaining(game.timeLimit);
+      setTimeLimit(game.timeLimit);
       setGameState("guessing");
     } catch (error) {
       const message =
@@ -192,6 +204,7 @@ export default function Game() {
       setGuessLocation(null);
       setCurrentResult(null);
       setTimeRemaining(nextRound.timeLimit);
+      setTimeLimit(nextRound.timeLimit);
       setGameState("guessing");
     } catch (error) {
       const message =
@@ -203,120 +216,179 @@ export default function Game() {
     }
   };
 
+  const isPlaying = gameState === "guessing" || gameState === "submitting";
+  const maxTotal = totalRounds * MAX_ROUND_SCORE;
+  const bestRound = scores.reduce((best, r) => Math.max(best, r.score), 0);
+
   return (
-    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-[#001233] dark:text-white">
-      <Header />
-      <div className="container mx-auto p-4">
-        <div className="mb-4 flex items-center">
-          <Link href="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
-          <div className="ml-auto">
-            <GameProgress
-              currentRound={currentRound}
-              totalRounds={totalRounds}
-              scores={scores}
-            />
-          </div>
-        </div>
+    <>
+      {/* ───────── Playing: immersive panorama + floating guess panel ───────── */}
+      {isPlaying && currentRoundData && (
+        <section className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-4 lg:px-6">
+          <div className="relative lg:h-[calc(100dvh-8rem)] lg:min-h-[560px]">
+            {/* Panorama: stacked on mobile, fills the stage on desktop */}
+            <div className="relative h-[46vh] min-h-[300px] w-full lg:absolute lg:inset-0 lg:h-full">
+              <GamePanorama
+                panoId={currentRoundData.panoId}
+                heading={currentRoundData.heading}
+                pitch={currentRoundData.pitch}
+                zoom={currentRoundData.zoom}
+              />
+            </div>
 
-        {gameState === "loading" && (
-          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg dark:bg-gray-800">
-            <p className="text-lg font-medium">Loading round...</p>
-            <p className="mt-2 text-sm text-muted-foreground dark:text-gray-300">
-              Preparing Toronto Street View and map data.
-            </p>
-          </div>
-        )}
+            {/* HUD */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 p-3 sm:p-4">
+              <GameHUD
+                currentRound={currentRound}
+                totalRounds={totalRounds}
+                scores={scores}
+                timeRemaining={timeRemaining}
+                timeLimit={timeLimit}
+                showTimer
+              />
+            </div>
 
-        {gameState === "error" && (
-          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg dark:bg-gray-800">
-            <h2 className="text-2xl font-bold">Something went wrong</h2>
-            <p className="mt-3 text-sm text-muted-foreground dark:text-gray-300">
-              {errorMessage ?? "The game could not continue."}
-            </p>
-            <div className="mt-4">
-              <Button onClick={() => void startGame()}>Try Again</Button>
+            {/* Guess panel */}
+            <div className="relative z-20 mt-3 lg:absolute lg:bottom-4 lg:right-4 lg:mt-0 lg:w-[360px] xl:w-[400px]">
+              <GuessPanel
+                guessLocation={guessLocation}
+                onMapClick={handleMapClick}
+                onSubmitGuess={() => void handleSubmitGuess()}
+                isSubmitting={gameState === "submitting"}
+                className="h-[48vh] min-h-[340px] lg:h-[clamp(360px,46vh,520px)]"
+              />
             </div>
           </div>
-        )}
+        </section>
+      )}
 
-        {(gameState === "guessing" || gameState === "submitting") &&
-          currentRoundData && (
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="md:col-span-2">
-                <GamePanorama
-                  panoId={currentRoundData.panoId}
-                  heading={currentRoundData.heading}
-                  pitch={currentRoundData.pitch}
-                  zoom={currentRoundData.zoom}
-                />
-              </div>
-              <div className="space-y-4">
-                <GameMap
-                  onMapClick={handleMapClick}
-                  guessLocation={guessLocation}
-                  actualLocation={null}
-                  isGuessing={true}
-                />
-                <GameControls
-                  onSubmitGuess={() => void handleSubmitGuess()}
-                  hasGuess={!!guessLocation}
-                  timeRemaining={timeRemaining}
-                  isSubmitting={gameState === "submitting"}
-                />
-              </div>
+      {/* ───────── Non-immersive states share a centered container ───────── */}
+      {!isPlaying && (
+        <section className="container py-8 sm:py-10">
+          {gameState === "loading" && (
+            <div className="mx-auto max-w-xl">
+              <LoadingScreen
+                title="Loading round…"
+                description="Preparing Toronto Street View and map data."
+              />
             </div>
           )}
 
-        {gameState === "results" && currentResult && (
-          <GameResults
-            guessLocation={currentResult.guessLocation}
-            actualLocation={currentResult.actualLocation}
-            score={currentResult.score}
-            distance={currentResult.distance}
-            onNextRound={() => void handleNextRound()}
-            isLastRound={currentResult.isLastRound}
-          />
-        )}
-
-        {gameState === "summary" && (
-          <div className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg dark:bg-gray-800">
-            <h2 className="mb-4 text-2xl font-bold">Game Summary</h2>
-            <div className="mb-6">
-              <p className="text-xl">Total Score: {totalScore}</p>
-              <p className="mt-1 text-sm text-muted-foreground dark:text-gray-400">
-                Leaderboard name: {savedUsername}
-              </p>
+          {gameState === "error" && (
+            <div className="mx-auto max-w-xl">
+              <ErrorCard
+                message={errorMessage ?? "The game could not continue."}
+                onRetry={() => void startGame()}
+                retryLabel="Try again"
+              />
             </div>
+          )}
 
-            <div className="mb-6 space-y-4">
-              <h3 className="text-lg font-semibold">Round Results:</h3>
-              {scores.map((round) => (
+          {gameState === "results" && currentResult && (
+            <div className="mx-auto max-w-6xl">
+              <GameResults
+                guessLocation={currentResult.guessLocation}
+                actualLocation={currentResult.actualLocation}
+                score={currentResult.score}
+                distance={currentResult.distance}
+                onNextRound={() => void handleNextRound()}
+                isLastRound={currentResult.isLastRound}
+                roundNumber={currentResult.roundNumber}
+                totalRounds={totalRounds}
+              />
+            </div>
+          )}
+
+          {gameState === "summary" && (
+            <div className="mx-auto max-w-3xl">
+              {/* Hero */}
+              <div className="surface-card relative animate-fade-up overflow-hidden rounded-3xl px-6 py-10 text-center sm:px-10">
                 <div
-                  key={round.roundNumber}
-                  className="flex items-center justify-between border-b border-border/70 pb-2"
-                >
-                  <div>
-                    <p className="font-medium">Round {round.roundNumber}</p>
-                    <p className="text-sm text-muted-foreground dark:text-gray-400">
-                      {round.distance === null
-                        ? "No guess submitted"
-                        : `Distance: ${round.distance.toFixed(2)} km`}
-                    </p>
-                  </div>
-                  <p className="font-bold">{round.score} points</p>
-                </div>
-              ))}
-            </div>
+                  className="absolute inset-0 -z-10 bg-grid-fade"
+                  aria-hidden="true"
+                />
+                <span className="inline-flex items-center gap-2 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                  <Flag className="size-3.5" />
+                  Game complete
+                </span>
+                <p className="mt-6 text-sm text-muted-foreground">
+                  Final score
+                </p>
+                <p className="mt-1 flex items-baseline justify-center gap-2">
+                  <span className="text-6xl font-bold tracking-tight tabular sm:text-7xl">
+                    <CountUp value={totalScore} />
+                  </span>
+                  <span className="text-xl font-medium text-muted-foreground">
+                    / {maxTotal.toLocaleString("en-US")}
+                  </span>
+                </p>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Best round{" "}
+                  <span className="font-semibold text-foreground tabular">
+                    {bestRound.toLocaleString("en-US")}
+                  </span>{" "}
+                  · Leaderboard name{" "}
+                  <span className="font-semibold text-foreground">
+                    {savedUsername}
+                  </span>
+                </p>
+              </div>
 
-            <div className="flex flex-col items-center gap-4">
-              <div className="order-1 w-full max-w-sm space-y-2">
-                <p className="text-sm font-medium">Save username?</p>
-                <div className="flex flex-col gap-2 sm:flex-row">
+              {/* Round breakdown */}
+              <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-75 sm:p-7">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Round breakdown
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {scores.map((round) => {
+                    const pct = Math.max(
+                      0,
+                      Math.min(100, (round.score / MAX_ROUND_SCORE) * 100),
+                    );
+                    return (
+                      <li
+                        key={round.roundNumber}
+                        className="flex items-center gap-4"
+                      >
+                        <span className="w-16 shrink-0 text-sm font-medium text-muted-foreground">
+                          Round {round.roundNumber}
+                        </span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-[width] duration-700 ease-spring",
+                              tierBarColor(round.score),
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="w-28 shrink-0 text-right text-sm">
+                          <span className="font-bold tabular">
+                            {round.score.toLocaleString("en-US")}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {round.distance === null
+                              ? "No guess"
+                              : round.distance < 1
+                                ? `${Math.round(round.distance * 1000)} m`
+                                : `${round.distance.toFixed(2)} km`}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Save username */}
+              <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-150 sm:p-7">
+                <div className="flex items-center gap-2">
+                  <Save className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold">
+                    Save your name to the leaderboard
+                  </h3>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={usernameInput}
                     onChange={(event) =>
@@ -324,40 +396,60 @@ export default function Game() {
                     }
                     placeholder={savedUsername}
                     maxLength={10}
+                    aria-label="Leaderboard name"
                     className="sm:flex-1"
                   />
                   <Button
                     type="button"
                     onClick={() => void handleSaveScore()}
                     disabled={isSavingScore}
-                    className="sm:min-w-[120px]"
+                    className="sm:min-w-[140px]"
                   >
-                    {isSavingScore ? "Saving..." : "Save Username"}
+                    {isSavingScore ? "Saving…" : "Save name"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground dark:text-gray-400">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Letters and numbers only, up to 10 characters.
                 </p>
                 {saveMessage && (
-                  <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-success">
+                    <Check className="size-4" />
                     {saveMessage}
                   </p>
                 )}
                 {saveErrorMessage && (
-                  <p className="text-sm text-red-500">{saveErrorMessage}</p>
+                  <p className="mt-2 text-sm font-medium text-destructive">
+                    {saveErrorMessage}
+                  </p>
                 )}
               </div>
 
-              <Button
-                onClick={() => void startGame()}
-                className="order-2 self-center bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
-              >
-                Play Again
-              </Button>
+              {/* Actions */}
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <Button
+                  onClick={() => void startGame()}
+                  size="xl"
+                  className="rounded-2xl shadow-glow"
+                >
+                  <RotateCcw className="size-5" />
+                  Play again
+                </Button>
+                <Button
+                  asChild
+                  size="xl"
+                  variant="outline"
+                  className="rounded-2xl"
+                >
+                  <Link href="/leaderboard">
+                    <Trophy className="size-5" />
+                    View leaderboard
+                  </Link>
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </main>
+          )}
+        </section>
+      )}
+    </>
   );
 }

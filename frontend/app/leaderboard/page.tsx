@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trophy } from "lucide-react";
-import Header from "@/components/Header";
+import Link from "next/link";
+import { Trophy, Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Pagination,
@@ -10,9 +10,12 @@ import {
   PaginationEllipsis,
   PaginationItem,
 } from "@/components/ui/pagination";
+import { Spinner } from "@/components/site/spinner";
+import { EmptyState, ErrorCard } from "@/components/site/states";
+import { LeaderboardPodium } from "@/components/leaderboard-podium";
+import { cn } from "@/lib/utils";
 import { fetchLeaderboard } from "@/lib/api";
 import type {
-  LeaderboardEntry,
   LeaderboardPeriod,
   LeaderboardResponse,
 } from "@/lib/types";
@@ -24,23 +27,23 @@ const LEADERBOARD_OPTIONS: Array<{
 }> = [
   {
     value: "lifetime",
-    label: "Lifetime",
-    description: "Scores across all finished games",
+    label: "All time",
+    description: "Top scores across every finished game.",
   },
   {
     value: "daily",
     label: "Daily",
-    description: "Best scores from the last 24 hours",
+    description: "Best scores from the last 24 hours.",
   },
   {
     value: "weekly",
     label: "Weekly",
-    description: "Best scores from the last 7 days",
+    description: "Best scores from the last 7 days.",
   },
   {
     value: "monthly",
     label: "Monthly",
-    description: "Best scores from the last 30 days",
+    description: "Best scores from the last 30 days.",
   },
 ];
 
@@ -48,6 +51,9 @@ const completedAtFormatter = new Intl.DateTimeFormat("en-CA", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+const formatDate = (value: string) =>
+  completedAtFormatter.format(new Date(value));
+
 const PREVIEW_LIMIT = 5;
 const EXPANDED_LIMIT = 25;
 
@@ -76,25 +82,19 @@ function getPaginationItems(currentPage: number, totalPages: number) {
   return items;
 }
 
-function getRankStyles(index: number) {
-  if (index === 0) {
-    return "border-yellow-400 bg-yellow-200 text-yellow-950 dark:border-yellow-300/70 dark:bg-yellow-400/20 dark:text-yellow-100";
-  }
-
-  if (index === 1) {
-    return "border-zinc-300 bg-zinc-100 text-zinc-800 dark:border-zinc-300/60 dark:bg-zinc-300/15 dark:text-zinc-100";
-  }
-
-  if (index === 2) {
-    return "border-orange-500 bg-orange-200 text-orange-950 dark:border-orange-400/60 dark:bg-orange-500/20 dark:text-orange-100";
-  }
-
-  return "border-border bg-secondary text-secondary-foreground";
+function getRankBadge(rank: number) {
+  if (rank === 1) return "bg-medal-gold/15 text-medal-gold ring-medal-gold/35";
+  if (rank === 2)
+    return "bg-medal-silver/15 text-medal-silver ring-medal-silver/35";
+  if (rank === 3)
+    return "bg-medal-bronze/15 text-medal-bronze ring-medal-bronze/35";
+  return "bg-muted text-muted-foreground ring-border";
 }
 
 export default function Leaderboard() {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
-  const [leaderEntry, setLeaderEntry] = useState<LeaderboardEntry | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(
+    null,
+  );
   const [period, setPeriod] = useState<LeaderboardPeriod>("lifetime");
   const [page, setPage] = useState(1);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -116,9 +116,6 @@ export default function Leaderboard() {
         });
         if (!isCancelled) {
           setLeaderboard(nextLeaderboard);
-          if (page === 1) {
-            setLeaderEntry(nextLeaderboard.entries[0] ?? null);
-          }
         }
       } catch (error) {
         const message =
@@ -147,14 +144,12 @@ export default function Leaderboard() {
     setPage(1);
     setIsExpanded(false);
     setLeaderboard(null);
-    setLeaderEntry(null);
   };
 
   const activeOption = LEADERBOARD_OPTIONS.find(
-    (option) => option.value === period
+    (option) => option.value === period,
   )!;
   const entries = leaderboard?.entries ?? [];
-  const topEntry = leaderEntry;
   const totalEntries = leaderboard?.total ?? 0;
   const totalPages = leaderboard?.totalPages ?? 1;
   const currentPage = leaderboard?.page ?? page;
@@ -163,223 +158,233 @@ export default function Leaderboard() {
   const showingFrom = totalEntries === 0 ? 0 : rankOffset + 1;
   const showingTo = totalEntries === 0 ? 0 : rankOffset + entries.length;
   const paginationItems = getPaginationItems(currentPage, totalPages);
+  // By design, the all-time board expands to a top-25 view (no pagination),
+  // while the time-bounded boards keep paging after the preview.
   const shouldPaginateExpanded = isExpanded && period !== "lifetime";
   const showMoreAvailable =
     !isLoading && !errorMessage && !isExpanded && totalEntries > PREVIEW_LIMIT;
+
+  // Podium for the first page; the list then continues from rank 4.
+  const showPodium =
+    !isLoading && !errorMessage && currentPage === 1 && entries.length > 0;
+  const listEntries = showPodium ? entries.slice(3) : entries;
+  const listRankBase = showPodium ? 3 : 0;
+
   const summaryText = isLoading
-    ? `Loading ${activeOption.label.toLowerCase()} scores...`
-    : !isExpanded
-      ? `Showing top ${entries.length} of ${totalEntries} score${
+    ? `Loading ${activeOption.label.toLowerCase()} scores…`
+    : !isExpanded || period === "lifetime"
+      ? `Top ${entries.length} of ${totalEntries} score${
           totalEntries === 1 ? "" : "s"
-        } for ${activeOption.label.toLowerCase()} play.`
-      : period === "lifetime"
-        ? `Showing top ${entries.length} of ${totalEntries} score${
-            totalEntries === 1 ? "" : "s"
-          } for ${activeOption.label.toLowerCase()} play.`
-      : `Showing ${showingFrom}-${showingTo} of ${totalEntries} score${
+        }`
+      : `Showing ${showingFrom}–${showingTo} of ${totalEntries} score${
           totalEntries === 1 ? "" : "s"
-        } for ${activeOption.label.toLowerCase()} play.`;
+        }`;
 
   return (
-    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-gray-900">
-      <Header />
-      <div className="container mx-auto max-w-5xl px-4 py-10">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Leaderboard</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              {activeOption.description}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/70 bg-card/85 px-4 py-3 text-sm shadow-sm shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
-            {summaryText}
-          </div>
+    <section className="container py-10 sm:py-14">
+      {/* Header */}
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            <Trophy className="size-3.5" />
+            Leaderboard
+          </span>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
+            Hall of the 6ix
+          </h1>
+          <p className="mt-3 max-w-xl text-pretty text-muted-foreground">
+            {activeOption.description}
+          </p>
         </div>
-
-        <div className="mb-6 flex flex-wrap gap-2">
-          {LEADERBOARD_OPTIONS.map((option) => {
-            const isActive = option.value === period;
-
-            return (
-              <Button
-                key={option.value}
-                variant="outline"
-                onClick={() => handlePeriodChange(option.value)}
-                className={
-                  isActive
-                    ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground dark:border-[#003566] dark:bg-[#003566] dark:text-white dark:hover:bg-[#003566] dark:hover:text-white"
-                    : "border-border bg-card/85 text-foreground hover:bg-accent hover:text-accent-foreground dark:border-white/20 dark:bg-[#001845] dark:text-white dark:hover:bg-[#00205B] dark:hover:text-white"
-                }
-              >
-                {option.label}
-              </Button>
-            );
-          })}
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1fr,1.8fr] lg:items-start">
-          <section className="self-start rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
-            <div className="flex items-center gap-2 text-primary dark:text-white">
-              <Trophy className="h-5 w-5" />
-              <p className="text-sm font-semibold uppercase tracking-[0.12em]">
-                Current Leader
-              </p>
-            </div>
-
-            {topEntry ? (
-              <div className="mt-5 space-y-5">
-                <div>
-                  <p className="text-lg font-semibold">{topEntry.username}</p>
-                  <p className="text-4xl font-bold">{topEntry.totalScore}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">points</p>
-                </div>
-                <div className="rounded-lg bg-secondary p-4 text-secondary-foreground dark:bg-gray-700 dark:text-gray-300">
-                  <p className="text-sm font-medium">
-                    Completed{" "}
-                    {completedAtFormatter.format(new Date(topEntry.completedAt))}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-5 text-sm text-muted-foreground">
-                No completed games in this range yet.
-              </p>
-            )}
-          </section>
-
-          <section className="rounded-lg border border-border/70 bg-card/90 p-6 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
-          {isLoading && (
-            <p className="my-8 text-center text-muted-foreground">
-              Loading scores...
-            </p>
-          )}
-
-          {!isLoading && errorMessage && (
-            <p className="my-8 text-center text-red-500">{errorMessage}</p>
-          )}
-
-          {!isLoading && !errorMessage && entries.length === 0 && (
-            <p className="my-8 text-center text-muted-foreground">
-              No completed games yet for {activeOption.label.toLowerCase()} play.
-            </p>
-          )}
-
-          {!isLoading && !errorMessage && entries.length > 0 && (
-            <div className="space-y-3">
-              {entries.map((entry, index) => {
-                const rank = rankOffset + index + 1;
-
-                return (
-                <div
-                  key={entry.id}
-                  className="flex items-center justify-between rounded-lg border border-border/70 bg-background/60 px-4 py-4 dark:border-white/10 dark:bg-[#001845]"
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border text-sm font-bold ${getRankStyles(
-                        rank - 1
-                      )}`}
-                    >
-                      #{rank}
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {entry.username}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Completed{" "}
-                        {completedAtFormatter.format(new Date(entry.completedAt))}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold">{entry.totalScore} points</p>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          )}
-
-          {showMoreAvailable && (
-            <div className="mt-6 flex justify-center">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setIsExpanded(true);
-                  setPage(1);
-                }}
-                className="border-border bg-background/80 px-6 hover:bg-accent hover:text-accent-foreground dark:border-white/20 dark:bg-[#001845] dark:text-white dark:hover:bg-[#00205B] dark:hover:text-white"
-              >
-                Show More
-              </Button>
-            </div>
-          )}
-
-          {!isLoading &&
-            !errorMessage &&
-            shouldPaginateExpanded &&
-            totalPages > 1 && (
-            <Pagination className="mt-6">
-              <PaginationContent className="flex-wrap justify-center gap-2">
-                <PaginationItem>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!leaderboard?.hasPreviousPage}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    className="border-border bg-background/80 hover:bg-accent hover:text-accent-foreground dark:border-white/20 dark:bg-[#001845] dark:text-white dark:hover:bg-[#00205B] dark:hover:text-white"
-                  >
-                    Previous
-                  </Button>
-                </PaginationItem>
-
-                {paginationItems.map((item) => (
-                  <PaginationItem key={item}>
-                    {typeof item === "number" ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={item === currentPage ? "default" : "outline"}
-                        onClick={() => setPage(item)}
-                        className={
-                          item === currentPage
-                            ? "min-w-9 bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-[#003566] dark:text-white dark:hover:bg-[#003566]"
-                            : "min-w-9 border-border bg-background/80 hover:bg-accent hover:text-accent-foreground dark:border-white/20 dark:bg-[#001845] dark:text-white dark:hover:bg-[#00205B] dark:hover:text-white"
-                        }
-                      >
-                        {item}
-                      </Button>
-                    ) : (
-                      <PaginationEllipsis />
-                    )}
-                  </PaginationItem>
-                ))}
-
-                <PaginationItem>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!leaderboard?.hasNextPage}
-                    onClick={() =>
-                      setPage((current) =>
-                        leaderboard?.hasNextPage ? current + 1 : current
-                      )
-                    }
-                    className="border-border bg-background/80 hover:bg-accent hover:text-accent-foreground dark:border-white/20 dark:bg-[#001845] dark:text-white dark:hover:bg-[#00205B] dark:hover:text-white"
-                  >
-                    Next
-                  </Button>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          )}
-          </section>
-        </div>
+        <Button asChild size="lg" className="rounded-xl shadow-glow">
+          <Link href="/game">
+            <Play className="size-4" />
+            Play & compete
+          </Link>
+        </Button>
       </div>
-    </main>
+
+      {/* Period segmented control + summary */}
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
+            {LEADERBOARD_OPTIONS.map((option) => {
+              const isActive = option.value === period;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handlePeriodChange(option.value)}
+                  className={cn(
+                    "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-all sm:px-4",
+                    isActive
+                      ? "bg-card text-foreground shadow-soft"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-pressed={isActive}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground tabular">{summaryText}</p>
+      </div>
+
+      {/* Board */}
+      <div className="mt-6">
+        {isLoading && (
+          <div className="surface-card flex items-center justify-center gap-3 rounded-2xl py-20 text-muted-foreground">
+            <Spinner size={26} />
+            <span className="text-sm font-medium">Loading scores…</span>
+          </div>
+        )}
+
+        {!isLoading && errorMessage && (
+          <ErrorCard
+            title="Couldn't load the leaderboard"
+            message={errorMessage}
+          />
+        )}
+
+        {!isLoading && !errorMessage && entries.length === 0 && (
+          <EmptyState
+            icon={Trophy}
+            title="No scores yet"
+            description={`Be the first to set a ${activeOption.label.toLowerCase()} score — finish a game and save your name.`}
+            action={
+              <Button asChild className="mt-1 rounded-xl">
+                <Link href="/game">
+                  <Play className="size-4" />
+                  Play now
+                </Link>
+              </Button>
+            }
+          />
+        )}
+
+        {!isLoading && !errorMessage && entries.length > 0 && (
+          <div className="space-y-6">
+            {showPodium && <LeaderboardPodium entries={entries} />}
+
+            {listEntries.length > 0 && (
+              <ul className="space-y-2.5">
+                {listEntries.map((entry, index) => {
+                  const rank = rankOffset + listRankBase + index + 1;
+                  return (
+                    <li
+                      key={entry.id}
+                      className="group flex animate-fade-up items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/50 px-4 py-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-accent/40 sm:px-5"
+                      style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
+                    >
+                      <div className="flex min-w-0 items-center gap-4">
+                        <span
+                          className={cn(
+                            "grid size-10 shrink-0 place-items-center rounded-xl text-sm font-bold ring-1 ring-inset tabular",
+                            getRankBadge(rank),
+                          )}
+                        >
+                          {rank}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold" title={entry.username}>
+                            {entry.username}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {formatDate(entry.completedAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold tabular">
+                          {entry.totalScore.toLocaleString("en-US")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">points</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {showMoreAvailable && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl px-8"
+                  onClick={() => {
+                    setIsExpanded(true);
+                    setPage(1);
+                  }}
+                >
+                  Show full leaderboard
+                </Button>
+              </div>
+            )}
+
+            {shouldPaginateExpanded && totalPages > 1 && (
+              <Pagination className="pt-2">
+                <PaginationContent className="flex-wrap justify-center gap-2">
+                  <PaginationItem>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Previous page"
+                      disabled={!leaderboard?.hasPreviousPage}
+                      onClick={() =>
+                        setPage((current) => Math.max(1, current - 1))
+                      }
+                      className="rounded-xl"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                  </PaginationItem>
+
+                  {paginationItems.map((item) => (
+                    <PaginationItem key={item}>
+                      {typeof item === "number" ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant={item === currentPage ? "default" : "outline"}
+                          onClick={() => setPage(item)}
+                          aria-current={item === currentPage ? "page" : undefined}
+                          className="rounded-xl tabular"
+                        >
+                          {item}
+                        </Button>
+                      ) : (
+                        <PaginationEllipsis />
+                      )}
+                    </PaginationItem>
+                  ))}
+
+                  <PaginationItem>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Next page"
+                      disabled={!leaderboard?.hasNextPage}
+                      onClick={() =>
+                        setPage((current) =>
+                          leaderboard?.hasNextPage ? current + 1 : current,
+                        )
+                      }
+                      className="rounded-xl"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { ImageOff } from "lucide-react";
+import { Spinner } from "@/components/site/spinner";
 
 interface ReviewLocationPanoramaProps {
   location: {
@@ -10,12 +12,6 @@ interface ReviewLocationPanoramaProps {
   };
   panoId: string | null;
 }
-
-const containerStyle = {
-  height: "600px",
-  width: "100%",
-  position: "relative" as const,
-};
 
 export function ReviewLocationPanorama({
   location,
@@ -132,34 +128,39 @@ export function ReviewLocationPanorama({
 
   if (loadError) {
     return (
-      <div className="flex h-[600px] items-center justify-center rounded-lg bg-black/80 p-6 text-center text-white">
-        Google Maps failed to load for Street View. Check the browser console and
-        API key restrictions.
+      <div className="flex h-[58vh] min-h-[420px] flex-col items-center justify-center gap-3 rounded-2xl bg-black/85 p-6 text-center text-white ring-1 ring-border/60">
+        <ImageOff className="size-8 text-white/70" />
+        <p className="max-w-sm text-sm text-white/80">
+          Google Maps failed to load for Street View. Check the browser console
+          and API key restrictions.
+        </p>
       </div>
     );
   }
 
   if (!isLoaded) {
     return (
-      <div className="flex h-[600px] items-center justify-center rounded-lg bg-black p-4 text-white">
-        Loading Google Maps...
+      <div className="flex h-[58vh] min-h-[420px] items-center justify-center rounded-2xl bg-black p-4 text-white ring-1 ring-border/60">
+        <Spinner size={30} />
       </div>
     );
   }
 
   return (
-    <div style={containerStyle}>
+    <div className="relative h-[58vh] min-h-[420px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60">
       {!isPanoramaReady && !panoramaError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 text-white">
-          Loading Street View...
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/65 text-white backdrop-blur-sm">
+          <Spinner size={30} />
+          <p className="text-sm text-white/80">Loading Street View…</p>
         </div>
       )}
       {panoramaError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/80 p-6 text-center text-white">
-          {panoramaError}
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-2xl bg-black/85 p-6 text-center text-white">
+          <ImageOff className="size-8 text-white/70" />
+          <p className="max-w-sm text-sm text-white/85">{panoramaError}</p>
         </div>
       )}
-      <div ref={streetViewRef} style={{ height: "100%", width: "100%" }} />
+      <div ref={streetViewRef} className="h-full w-full" />
     </div>
   );
 }

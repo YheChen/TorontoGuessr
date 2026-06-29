@@ -11,6 +11,19 @@ Players get five Toronto Street View locations, place guesses on a map, and earn
 - Supabase: Verified location cache, game sessions, leaderboard data
 - Google Maps / Google Street View: gameplay map, Street View rendering, review tooling
 
+## Design & UI
+
+The frontend uses a custom design system ("Cartographic Premium") built on Tailwind CSS and a small set of reusable components.
+
+- **Theming:** semantic HSL design tokens drive both a cool paper-white light theme and a deep-navy dark theme (the default). Toronto brand accents (navy, azure, sky, red, gold) live in dedicated tokens. Toggle themes from the navbar.
+- **Toronto identity:** an ambient backdrop layers a cartographic grid, a soft azure spotlight, and a stylized Toronto skyline with a CN Tower–inspired logo mark — understated, not touristy.
+- **Map-first gameplay:** an immersive Street View stage with a floating glass HUD (round, score, animated timer ring) and a floating guess panel; round and final results animate scores with count-ups and reveal transitions.
+- **Shared components:** global chrome (`AppShell`, `Navbar`, `Footer`, `TorontoBackdrop`) plus building blocks (`SectionHeading`, `StatCard`, `Reveal`, `CountUp`, `Spinner`, `LoadingScreen`, `EmptyState`, `ErrorCard`, `GameHUD`, `GuessPanel`, `LeaderboardPodium`) live in `frontend/components/site/` and `frontend/components/`.
+- **Accessibility & motion:** semantic HTML, labeled controls, visible focus rings, and a global `prefers-reduced-motion` guard that disables animations for users who opt out.
+- **Responsive:** every page is tuned for desktop, tablet, and mobile, including a stacked mobile gameplay layout that keeps Street View and the guess map usable on small screens.
+
+Gameplay, scoring, leaderboards, statistics, authentication, the admin review workflow, and all backend APIs are unchanged — this was a presentation-layer redesign.
+
 ## Repo Layout
 
 ```text

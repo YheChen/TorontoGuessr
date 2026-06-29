@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Header from "@/components/Header";
+import {
+  ShieldCheck,
+  Inbox,
+  Trash2,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  MapPin,
+  Hash,
+} from "lucide-react";
 import { ReviewLocationPanorama } from "@/components/review-location-panorama";
 import { ReviewLocationMap } from "@/components/review-location-map";
 import { fetchLocationReviewQueue, updateLocationReviewStatus } from "@/lib/api";
@@ -9,10 +20,11 @@ import type {
   LocationReviewQueueResponse,
   LocationReviewStatus,
 } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/site/spinner";
+import { cn } from "@/lib/utils";
 
 const TOKEN_STORAGE_KEY = "adminReviewToken";
 const timestampFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -21,27 +33,15 @@ const timestampFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 function getStatusLabel(status: LocationReviewStatus) {
-  if (status === "rejected") {
-    return "Rejected";
-  }
-
-  if (status === "accepted") {
-    return "Accepted";
-  }
-
+  if (status === "rejected") return "Rejected";
+  if (status === "accepted") return "Accepted";
   return "Pending";
 }
 
-function getStatusBadgeClass(status: LocationReviewStatus) {
-  if (status === "rejected") {
-    return "border-red-200 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-100";
-  }
-
-  if (status === "accepted") {
-    return "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-100";
-  }
-
-  return "border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-100";
+function getStatusVariant(status: LocationReviewStatus): BadgeProps["variant"] {
+  if (status === "rejected") return "destructive";
+  if (status === "accepted") return "success";
+  return "info";
 }
 
 export default function ReviewLocationsPage() {
@@ -59,7 +59,11 @@ export default function ReviewLocationsPage() {
 
   const currentEntry = queue?.entry ?? null;
 
-  const loadQueue = async (index: number, token: string, locationId?: string) => {
+  const loadQueue = async (
+    index: number,
+    token: string,
+    locationId?: string,
+  ) => {
     if (!token) {
       return;
     }
@@ -73,7 +77,7 @@ export default function ReviewLocationsPage() {
     } catch (error) {
       setQueue(null);
       setErrorMessage(
-        error instanceof Error ? error.message : "Could not load review queue."
+        error instanceof Error ? error.message : "Could not load review queue.",
       );
     } finally {
       setIsLoading(false);
@@ -99,7 +103,9 @@ export default function ReviewLocationsPage() {
       .catch((error) => {
         setQueue(null);
         setErrorMessage(
-          error instanceof Error ? error.message : "Could not load review queue."
+          error instanceof Error
+            ? error.message
+            : "Could not load review queue.",
         );
       })
       .finally(() => {
@@ -153,12 +159,12 @@ export default function ReviewLocationsPage() {
       setStatusMessage(
         action === "accept"
           ? "Location accepted and removed from the review queue."
-          : "Location rejected and removed from the review queue."
+          : "Location rejected and removed from the review queue.",
       );
       await loadQueue(queue.index, adminToken);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Could not update location."
+        error instanceof Error ? error.message : "Could not update location.",
       );
     } finally {
       setIsMutating(false);
@@ -174,173 +180,234 @@ export default function ReviewLocationsPage() {
     setErrorMessage(null);
 
     try {
-      await updateLocationReviewStatus(lastAction.locationId, "undo", adminToken);
+      await updateLocationReviewStatus(
+        lastAction.locationId,
+        "undo",
+        adminToken,
+      );
       setStatusMessage("Last review action was undone.");
       await loadQueue(lastAction.index, adminToken, lastAction.locationId);
       setLastAction(null);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Could not undo last action."
+        error instanceof Error ? error.message : "Could not undo last action.",
       );
     } finally {
       setIsMutating(false);
     }
   };
 
+  const tiles = [
+    {
+      label: "In queue",
+      value: queue?.total ?? 0,
+      icon: Inbox,
+      tone: "bg-accent text-primary",
+    },
+    {
+      label: "Rejected",
+      value: queue?.rejectedCount ?? 0,
+      icon: Trash2,
+      tone: "bg-destructive/12 text-destructive",
+    },
+    {
+      label: "Position",
+      value:
+        queue && currentEntry
+          ? `${queue.index + 1} / ${queue.total}`
+          : "—",
+      icon: Hash,
+      tone: "bg-secondary text-secondary-foreground",
+    },
+  ] as const;
+
   return (
-    <main className="flex flex-1 flex-col bg-background text-foreground dark:bg-[#001233] dark:text-white">
-      <Header />
-      <div className="container mx-auto flex flex-1 flex-col px-4 py-10">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.12em] text-primary">
-              Admin Review
-            </p>
-            <h1 className="mt-2 text-3xl font-bold">Verified Location Review</h1>
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Review unverified Street View locations, accept the good ones, and
-              mark bad indoor or unusable panoramas for deletion.
-            </p>
-          </div>
-          <Card className="w-full max-w-md border-border/70 bg-card/90 shadow-sm dark:bg-gray-800">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">Admin Access</CardTitle>
-              <CardDescription>
-                Enter the shared review token configured on the backend.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Input
-                type="password"
-                value={tokenInput}
-                onChange={(event) => setTokenInput(event.target.value)}
-                placeholder="Admin review token"
-              />
-              <div className="flex gap-2">
-                <Button type="button" onClick={() => void handleConnect()}>
-                  Connect
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setTokenInput("");
-                    setAdminToken(null);
-                    setQueue(null);
-                    setLastAction(null);
-                    setStatusMessage(null);
-                    setErrorMessage(null);
-                    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-                  }}
-                >
-                  Clear
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+    <section className="container py-10 sm:py-12">
+      {/* Header + access */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            <ShieldCheck className="size-3.5" />
+            Admin
+          </span>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            Location review
+          </h1>
+          <p className="mt-3 max-w-2xl text-pretty text-muted-foreground">
+            Review unverified Street View locations, accept the good ones, and
+            flag indoor or unusable panoramas for removal.
+          </p>
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Badge variant="secondary">Pending Review: {queue?.total ?? 0}</Badge>
-          <Badge className="border-red-200 bg-red-100 text-red-800 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-100">
-            Rejected: {queue?.rejectedCount ?? 0}
-          </Badge>
-          {currentEntry && (
-            <Badge className={getStatusBadgeClass(currentEntry.reviewStatus)}>
-              {getStatusLabel(currentEntry.reviewStatus)}
-            </Badge>
+        <div className="surface-card w-full max-w-md rounded-2xl p-5">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold">Admin access</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Enter the shared review token configured on the backend.
+          </p>
+          <Input
+            type="password"
+            value={tokenInput}
+            onChange={(event) => setTokenInput(event.target.value)}
+            placeholder="Admin review token"
+            aria-label="Admin review token"
+            className="mt-3"
+          />
+          <div className="mt-3 flex gap-2">
+            <Button type="button" onClick={() => void handleConnect()}>
+              Connect
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setTokenInput("");
+                setAdminToken(null);
+                setQueue(null);
+                setLastAction(null);
+                setStatusMessage(null);
+                setErrorMessage(null);
+                window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {tiles.map((tile) => (
+          <div key={tile.label} className="surface-card rounded-2xl p-5">
+            <span
+              className={cn(
+                "grid size-9 place-items-center rounded-lg",
+                tile.tone,
+              )}
+            >
+              <tile.icon className="size-5" />
+            </span>
+            <p className="mt-3 text-2xl font-bold tabular">{tile.value}</p>
+            <p className="text-sm text-muted-foreground">{tile.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Messages */}
+      {(errorMessage || statusMessage) && (
+        <div className="mt-6 space-y-2">
+          {errorMessage && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+            >
+              {errorMessage}
+            </div>
+          )}
+          {statusMessage && (
+            <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm font-medium text-success">
+              {statusMessage}
+            </div>
           )}
         </div>
+      )}
 
-        {(errorMessage || statusMessage) && (
-          <div className="mb-6 space-y-2">
-            {errorMessage && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
-                {errorMessage}
-              </div>
-            )}
-            {statusMessage && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100">
-                {statusMessage}
-              </div>
-            )}
-          </div>
-        )}
-
+      {/* Body */}
+      <div className="mt-6">
         {!adminToken && (
-          <Card className="border-border/70 bg-card/90 dark:bg-gray-800">
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              Connect with a valid admin token to load the review queue.
-            </CardContent>
-          </Card>
+          <div className="surface-card rounded-2xl p-8 text-center text-sm text-muted-foreground">
+            Connect with a valid admin token to load the review queue.
+          </div>
         )}
 
         {adminToken && isLoading && !queue && (
-          <Card className="border-border/70 bg-card/90 dark:bg-gray-800">
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              Loading review queue...
-            </CardContent>
-          </Card>
+          <div className="surface-card flex items-center justify-center gap-3 rounded-2xl py-16 text-sm text-muted-foreground">
+            <Spinner size={26} />
+            Loading review queue…
+          </div>
         )}
 
         {adminToken && !isLoading && queue && !currentEntry && (
-          <Card className="border-border/70 bg-card/90 dark:bg-gray-800">
-            <CardContent className="space-y-4 p-6">
-              <p className="text-sm text-muted-foreground">
+          <div className="surface-card flex flex-col items-center gap-4 rounded-2xl px-8 py-14 text-center">
+            <span className="grid size-12 place-items-center rounded-full bg-success/12 text-success ring-1 ring-inset ring-success/25">
+              <Check className="size-6" />
+            </span>
+            <div>
+              <p className="text-base font-semibold">Queue is clear</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 No unverified locations are waiting for review.
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!lastAction || isMutating}
-                  onClick={() => void handleUndo()}
-                >
-                  Undo Last Action
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!lastAction || isMutating}
+              onClick={() => void handleUndo()}
+            >
+              <RotateCcw className="size-4" />
+              Undo last action
+            </Button>
+          </div>
         )}
 
         {adminToken && currentEntry && (
-          <div>
-            <div className="grid items-start gap-6 xl:grid-cols-[1.55fr,1fr]">
-              <div className="space-y-4">
-                <section className="self-start rounded-lg border border-border/70 bg-card/90 p-4 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
-                  <ReviewLocationPanorama
-                    key={`panorama-${currentEntry.id}`}
-                    panoId={currentEntry.panoId}
-                    location={{
-                      lat: currentEntry.lat,
-                      lng: currentEntry.lng,
-                    }}
-                  />
-                </section>
+          <div className="grid items-start gap-6 xl:grid-cols-[1.55fr_1fr]">
+            {/* Panorama + actions */}
+            <div className="space-y-4">
+              <div className="surface-card flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+                <Badge variant={getStatusVariant(currentEntry.reviewStatus)}>
+                  {getStatusLabel(currentEntry.reviewStatus)}
+                </Badge>
+                <span className="font-mono-accent text-xs text-muted-foreground">
+                  {currentEntry.id}
+                </span>
+              </div>
 
-                <div className="flex flex-wrap justify-center gap-3">
+              <div className="surface-card rounded-2xl p-2.5">
+                <ReviewLocationPanorama
+                  key={`panorama-${currentEntry.id}`}
+                  panoId={currentEntry.panoId}
+                  location={{
+                    lat: currentEntry.lat,
+                    lng: currentEntry.lng,
+                  }}
+                />
+              </div>
+
+              {/* Action toolbar */}
+              <div className="glass-strong sticky bottom-4 z-10 rounded-2xl p-3 shadow-elevated">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isMutating || isLoading}
+                    onClick={() => void handleDecision("reject")}
+                    className="col-span-1"
+                  >
+                    <X className="size-4" />
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="success"
+                    disabled={isMutating || isLoading}
+                    onClick={() => void handleDecision("accept")}
+                    className="col-span-1"
+                  >
+                    <Check className="size-4" />
+                    Accept
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
                     disabled={!queue?.hasPrevious || isMutating || isLoading}
                     onClick={() => void handleMove(-1)}
                   >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={isMutating || isLoading}
-                    onClick={() => void handleDecision("reject")}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={isMutating || isLoading}
-                    onClick={() => void handleDecision("accept")}
-                  >
-                    Accept
+                    <ChevronLeft className="size-4" />
+                    Prev
                   </Button>
                   <Button
                     type="button"
@@ -349,71 +416,101 @@ export default function ReviewLocationsPage() {
                     onClick={() => void handleMove(1)}
                   >
                     Next
+                    <ChevronRight className="size-4" />
                   </Button>
+                </div>
+                <div className="mt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
                     disabled={!lastAction || isMutating || isLoading}
                     onClick={() => void handleUndo()}
+                    className="w-full"
                   >
-                    Undo Last Action
+                    <RotateCcw className="size-4" />
+                    Undo last action
                   </Button>
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-6">
-                <section className="rounded-lg border border-border/70 bg-card/90 p-4 shadow-lg shadow-sky-950/5 backdrop-blur dark:bg-gray-800 dark:shadow-none">
-                  <ReviewLocationMap
-                    key={`map-${currentEntry.id}`}
-                    location={{
-                      lat: currentEntry.lat,
-                      lng: currentEntry.lng,
-                    }}
+            {/* Map + details */}
+            <div className="space-y-4">
+              <div className="surface-card rounded-2xl p-2.5">
+                <ReviewLocationMap
+                  key={`map-${currentEntry.id}`}
+                  location={{
+                    lat: currentEntry.lat,
+                    lng: currentEntry.lng,
+                  }}
+                />
+              </div>
+
+              <div className="surface-card rounded-2xl p-6">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4 text-primary" />
+                  <h3 className="text-base font-semibold">Location details</h3>
+                </div>
+                <dl className="mt-4 space-y-3 text-sm">
+                  <DetailRow label="Latitude" value={currentEntry.lat.toFixed(6)} mono />
+                  <DetailRow label="Longitude" value={currentEntry.lng.toFixed(6)} mono />
+                  <DetailRow
+                    label="Panorama"
+                    value={currentEntry.panoId ?? "Missing"}
+                    mono
                   />
-                </section>
-
-                <Card className="border-border/70 bg-card/90 dark:bg-gray-800">
-                  <CardHeader>
-                    <CardTitle className="text-xl">Location Details</CardTitle>
-                    <CardDescription>
-                      Review metadata for the current queue item.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <p>
-                      <span className="font-medium">ID:</span> {currentEntry.id}
-                    </p>
-                    <p>
-                      <span className="font-medium">Latitude:</span>{" "}
-                      {currentEntry.lat.toFixed(6)}
-                    </p>
-                    <p>
-                      <span className="font-medium">Longitude:</span>{" "}
-                      {currentEntry.lng.toFixed(6)}
-                    </p>
-                    <p>
-                      <span className="font-medium">Panorama:</span>{" "}
-                      {currentEntry.panoId ?? "Missing"}
-                    </p>
-                    <p>
-                      <span className="font-medium">Created:</span>{" "}
-                      {currentEntry.createdAt
-                        ? timestampFormatter.format(new Date(currentEntry.createdAt))
-                        : "Unknown"}
-                    </p>
-                    <p>
-                      <span className="font-medium">Updated:</span>{" "}
-                      {currentEntry.updatedAt
-                        ? timestampFormatter.format(new Date(currentEntry.updatedAt))
-                        : "Unknown"}
-                    </p>
-                  </CardContent>
-                </Card>
+                  <DetailRow
+                    label="Created"
+                    value={
+                      currentEntry.createdAt
+                        ? timestampFormatter.format(
+                            new Date(currentEntry.createdAt),
+                          )
+                        : "Unknown"
+                    }
+                  />
+                  <DetailRow
+                    label="Updated"
+                    value={
+                      currentEntry.updatedAt
+                        ? timestampFormatter.format(
+                            new Date(currentEntry.updatedAt),
+                          )
+                        : "Unknown"
+                    }
+                  />
+                </dl>
               </div>
             </div>
           </div>
         )}
       </div>
-    </main>
+    </section>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 pb-3 last:border-0 last:pb-0">
+      <dt className="shrink-0 text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          "min-w-0 truncate text-right font-medium",
+          mono && "font-mono-accent text-xs",
+        )}
+        title={value}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }

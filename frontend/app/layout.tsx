@@ -1,15 +1,74 @@
 import type React from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { Github } from "lucide-react";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { MapThemeProvider } from "@/components/site/map-theme";
+import { AppShell } from "@/components/site/app-shell";
+import { getSiteUrl } from "@/lib/site-url";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
+
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
-  title: "TorontoGuessr",
-  description: "Test your knowledge of Toronto streets",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "TorontoGuessr — How well do you know the 6ix?",
+    template: "%s · TorontoGuessr",
+  },
+  description:
+    "A premium street-guessing game for Toronto. Drop into Street View, read the city, and pin your guess across five rounds. Climb the leaderboard.",
+  keywords: [
+    "Toronto",
+    "GeoGuessr",
+    "Street View",
+    "geography game",
+    "map game",
+    "the 6ix",
+  ],
+  authors: [{ name: "Yanzhen Chen", url: "https://github.com/YheChen" }],
+  creator: "Yanzhen Chen",
+  applicationName: "TorontoGuessr",
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    title: "TorontoGuessr — How well do you know the 6ix?",
+    description:
+      "Drop into Toronto Street View, read the city, and pin your guess across five rounds.",
+    siteName: "TorontoGuessr",
+    images: [
+      {
+        url: "/TorontoGuessrThumbnail.webp",
+        width: 1200,
+        height: 630,
+        alt: "TorontoGuessr",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TorontoGuessr — How well do you know the 6ix?",
+    description:
+      "Drop into Toronto Street View, read the city, and pin your guess across five rounds.",
+    images: ["/TorontoGuessrThumbnail.webp"],
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f8fc" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a1020" },
+  ],
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -26,30 +85,16 @@ export default function RootLayout({
           data-website-id="aabe665b-45c4-4c8e-98fb-e0d6265a3509"
         ></script>
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.variable} font-sans`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
           enableSystem={false}
           disableTransitionOnChange
         >
-          <div className="flex min-h-screen flex-col">
-            <div className="flex flex-1 flex-col">{children}</div>
-            <footer className="border-t border-border/70 bg-background text-muted-foreground shadow-sm backdrop-blur dark:border-none dark:bg-[#00205B] dark:text-blue-100/70 dark:shadow-md dark:backdrop-blur-none">
-              <div className="container mx-auto flex h-[72px] flex-wrap items-center justify-center gap-4 px-4 text-center text-sm">
-                <span>© 2026 Yanzhen Chen</span>
-                <a
-                  href="https://github.com/YheChen"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 transition-colors hover:text-foreground dark:hover:text-white"
-                >
-                  <Github className="h-4 w-4" aria-hidden="true" />
-                  <span>GitHub</span>
-                </a>
-              </div>
-            </footer>
-          </div>
+          <MapThemeProvider>
+            <AppShell>{children}</AppShell>
+          </MapThemeProvider>
         </ThemeProvider>
       </body>
     </html>
