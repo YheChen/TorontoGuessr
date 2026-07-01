@@ -43,6 +43,8 @@ export function ReviewLocationPanorama({
       const panorama = new google.maps.StreetViewPanorama(streetViewRef.current, {
         disableDefaultUI: true,
         showRoadLabels: false,
+        motionTracking: false,
+        motionTrackingControl: false,
         pov: {
           heading: 0,
           pitch: 0,

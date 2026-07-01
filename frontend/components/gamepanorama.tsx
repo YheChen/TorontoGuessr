@@ -39,6 +39,9 @@ export default function GamePanorama({
       zoom,
       disableDefaultUI: true,
       showRoadLabels: false,
+      // Don't rotate the view with the phone's gyroscope on mobile.
+      motionTracking: false,
+      motionTrackingControl: false,
     });
 
     // Hide the overlay as soon as the panorama reports it has imagery, rather
