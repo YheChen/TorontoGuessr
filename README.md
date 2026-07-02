@@ -11,6 +11,49 @@ Players get five Toronto Street View locations, place guesses on a map, and earn
 - Supabase: Verified location cache, game sessions, leaderboard data
 - Google Maps / Google Street View: gameplay map, Street View rendering, review tooling
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Browser["Browser · Next.js frontend"]
+        Pages["App router pages<br/>(landing, game, leaderboard, admin)"]
+        GameUI["Game UI<br/>(Street View panorama + guess map)"]
+        ApiClient["API client<br/>(lib/api.ts, REST + JSON)"]
+        Pages --> ApiClient
+        GameUI --> ApiClient
+    end
+
+    subgraph Backend["Node backend (Vercel Functions or local server)"]
+        Router["Router<br/>(REST routes, admin token gate)"]
+        GameStore["Game store<br/>(sessions, scoring, leaderboard)"]
+        LocationService["Location service<br/>(round selection, review queue)"]
+        SupabaseClient["Supabase client<br/>(PostgREST, service role)"]
+        Router --> GameStore
+        Router --> LocationService
+        GameStore --> SupabaseClient
+        LocationService --> SupabaseClient
+    end
+
+    subgraph External["External services"]
+        MapsJS["Google Maps JS API<br/>(maps + Street View rendering)"]
+        MetadataAPI["Street View metadata API<br/>(pano validation)"]
+        Postgres[("Supabase Postgres<br/>verified_locations, game_sessions")]
+    end
+
+    ApiClient -- "REST /api" --> Router
+    GameUI -- "renders panoramas" --> MapsJS
+    LocationService -- "validates panos" --> MetadataAPI
+    SupabaseClient --> Postgres
+```
+
+Key flows:
+
+- Starting a game selects five verified locations and creates a session; only pano ids and headings reach the browser, never the answer coordinates.
+- The browser renders Street View and the guess map directly through the Google Maps JS API; the backend is not in the rendering path.
+- Guesses are scored server-side (haversine distance, 0 to 5,000 points) so scores cannot be forged client-side.
+- Leaderboards and stats aggregate finished `game_sessions` rows by period.
+- Admin review routes are gated by an `x-admin-token` header checked against `ADMIN_REVIEW_TOKEN`.
+
 ## Design & UI
 
 The frontend uses a custom design system ("Cartographic Premium") built on Tailwind CSS and a small set of reusable components.
