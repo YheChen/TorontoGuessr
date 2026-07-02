@@ -344,3 +344,78 @@ Right now the repo can use the same Google key on both frontend and backend, but
 ## Notes
 
 - The frontend always needs a Google Maps API key because gameplay and review tooling both use Google Maps and Street View.
+
+## Interview Diagram
+
+```mermaid
+flowchart TB
+    subgraph Browser["Browser (Next.js Frontend)"]
+        Pages["App Router Pages<br/>(Landing, Game, Leaderboard, Admin)"]
+        UI["Game UI<br/>(Street View + Guess Map)"]
+        Client["REST API Client"]
+
+        Pages --> Client
+        UI --> Client
+    end
+
+    subgraph Backend["Backend (Node.js + Vercel Functions)"]
+        API["REST API"]
+
+        Game["Game Service<br/>(Sessions, Scoring, Leaderboard)"]
+
+        Location["Location Service<br/>(Round Selection,<br/>Panorama Validation,<br/>Review Queue)"]
+
+        DB["Supabase Client"]
+
+        API --> Game
+        API --> Location
+        Game --> DB
+        Location --> DB
+    end
+
+    subgraph External["External Services"]
+        Maps["Google Maps JavaScript API<br/>(Street View Rendering)"]
+
+        Metadata["Street View Metadata API<br/>(Panorama Validation)"]
+
+        Postgres[("Supabase PostgreSQL<br/>verified_locations<br/>game_sessions")]
+    end
+
+    Client -- "REST /api" --> API
+    UI -- "Loads panoramas" --> Maps
+    Location -- "Validates panoramas" --> Metadata
+    DB --> Postgres
+```
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant Database
+    participant Google
+
+    User->>Frontend: Click "Start Game"
+
+    Frontend->>Backend: POST /api/game/start
+
+    Backend->>Database: Fetch 5 verified locations
+
+    Database-->>Backend: Locations + panorama IDs
+
+    Backend-->>Frontend: Game session
+
+    Frontend->>Google: Request Street View panorama
+
+    Google-->>Frontend: Panorama rendered
+
+    User->>Frontend: Submit guess
+
+    Frontend->>Backend: POST /api/game/guess
+
+    Backend->>Database: Store guess and compute score
+
+    Database-->>Backend: Updated session
+
+    Backend-->>Frontend: Score and next round
+```
