@@ -36,19 +36,19 @@ flowchart TB
 
     subgraph External["External services"]
         MapsJS["Google Maps JS API<br/>(maps + Street View rendering)"]
-        MetadataAPI["Street View metadata API<br/>(pano validation)"]
+        MetadataAPI["Street View metadata API<br/>(panorama validation)"]
         Postgres[("Supabase Postgres<br/>verified_locations, game_sessions")]
     end
 
     ApiClient -- "REST /api" --> Router
     GameUI -- "renders panoramas" --> MapsJS
-    LocationService -- "validates panos" --> MetadataAPI
+    LocationService -- "validates panoramas" --> MetadataAPI
     SupabaseClient --> Postgres
 ```
 
 Key flows:
 
-- Starting a game selects five verified locations and creates a session; only pano ids and headings reach the browser, never the answer coordinates.
+- Starting a game selects five verified locations and creates a session; only panorama ids and headings reach the browser, never the answer coordinates.
 - The browser renders Street View and the guess map directly through the Google Maps JS API; the backend is not in the rendering path.
 - Guesses are scored server-side (haversine distance, 0 to 5,000 points) so scores cannot be forged client-side.
 - Leaderboards and stats aggregate finished `game_sessions` rows by period.
