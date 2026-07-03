@@ -127,17 +127,7 @@ export default function Home() {
 
       {/* ─────────────────────── Features ─────────────────────── */}
       <section className="container py-20 sm:py-28">
-        <Reveal>
-          <SectionHeading
-            align="center"
-            eyebrow="Why it's fun"
-            title="Simple to play, hard to master"
-            description="Everything you need to test your knowledge of the city, wrapped in a fast, map-first experience."
-            className="mx-auto items-center text-center"
-          />
-        </Reveal>
-
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
           {FEATURES.map((feature, index) => (
             <Reveal key={feature.title} delay={index * 90}>
               <article className="surface-card group h-full rounded-2xl p-7 transition-transform duration-300 hover:-translate-y-1">
