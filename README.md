@@ -418,3 +418,28 @@ sequenceDiagram
 
     Backend-->>Frontend: Score and next round
 ```
+
+```mermaid
+flowchart LR
+    A["1. Player clicks 'Start Game'"] --> B["2. Frontend sends POST /api/game/start"]
+
+    B --> C["3. Backend Game Engine"]
+
+    C --> D["4. Query PostgreSQL<br/>Fetch 5 verified locations"]
+
+    D --> E["5. Create game session"]
+
+    E --> F["6. Return locations + session ID"]
+
+    F --> G["7. Frontend loads Street View<br/>using Google Maps JS API"]
+
+    G --> H["8. Player submits guess"]
+
+    H --> I["9. POST /api/game/guess"]
+
+    I --> J["10. Backend computes distance<br/>using Haversine formula"]
+
+    J --> K["11. Update session & score<br/>in PostgreSQL"]
+
+    K --> L["12. Return score<br/>and next round"]
+```
