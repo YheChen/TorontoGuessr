@@ -23,7 +23,7 @@ flowchart TB
         GameUI --> ApiLayer
     end
 
-    subgraph Backend["Backend API (Node.js on Vercel Functions)<br/>Stateless Serverless Functions"]
+    subgraph Backend["Backend API (Node.js deployed as Vercel Functions)<br/>Stateless Serverless Functions"]
         RestApi["REST API<br/>(request routing + admin auth)"]
         GameEngine["Game Engine<br/>Game Session Management<br/>Scoring Logic<br/>Leaderboard"]
         LocationService["Location Service<br/>Random Round Selection<br/>Street View Validation<br/>Admin Review Workflow"]
@@ -31,12 +31,11 @@ flowchart TB
         RestApi --> LocationService
     end
 
-    subgraph ExternalAPIs["External APIs"]
+    subgraph DataLayer["Database & External APIs"]
+        Postgres[("PostgreSQL Database<br/>verified_locations<br/>game_sessions")]
         MapsJS["Google Maps JavaScript API<br/>(map + Street View rendering)"]
         MetadataAPI["Google Street View Metadata API<br/>(panorama validation)"]
     end
-
-    Postgres[("PostgreSQL Database<br/>Hosted on Supabase")]
 
     ApiLayer -- "REST + JSON" --> RestApi
     GameUI -- "renders panoramas" --> MapsJS
@@ -44,6 +43,8 @@ flowchart TB
     GameEngine --> Postgres
     LocationService --> Postgres
 ```
+
+> **Design Principle:** The frontend is responsible for rendering the user experience, while the backend contains all business logic, persistence, and location validation through stateless serverless functions.
 
 Key flows:
 
