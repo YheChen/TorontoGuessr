@@ -18,28 +18,28 @@ flowchart TB
     subgraph Frontend["Frontend (Next.js on Vercel)"]
         Pages["Frontend Pages<br/>(landing, game, leaderboard, admin)"]
         GameUI["Game UI<br/>(Street View panorama + guess map)"]
-        ApiLayer["API Layer<br/>(backend communication)"]
+        ApiLayer["API Layer"]
         Pages --> ApiLayer
         GameUI --> ApiLayer
     end
 
-    subgraph Backend["Backend API (Node.js deployed as Vercel Functions)<br/>Stateless Serverless Functions"]
-        RestApi["REST API<br/>(request routing + admin auth)"]
-        GameEngine["Game Engine<br/>Game Session Management<br/>Scoring Logic<br/>Leaderboard"]
-        LocationService["Location Service<br/>Random Round Selection<br/>Street View Validation<br/>Admin Review Workflow"]
+    subgraph Backend["Backend API (Node.js on Vercel Functions)<br/>Stateless Serverless Functions"]
+        RestApi["REST API<br/>(request routing)"]
+        GameEngine["Game Engine<br/>Session Management<br/>Scoring Engine<br/>Leaderboard"]
+        LocationService["Location Service<br/>Random Round Selection<br/>Panorama Validation<br/>Admin Review Workflow"]
         RestApi --> GameEngine
         RestApi --> LocationService
     end
 
     subgraph DataLayer["Database & External APIs"]
         Postgres[("PostgreSQL Database<br/>verified_locations<br/>game_sessions")]
-        MapsJS["Google Maps JavaScript API<br/>(map + Street View rendering)"]
+        MapsJS["Google Maps JavaScript API<br/>(browser-side map & Street View rendering)"]
         MetadataAPI["Google Street View Metadata API<br/>(panorama validation)"]
     end
 
-    ApiLayer -- "REST + JSON" --> RestApi
-    GameUI -- "renders panoramas" --> MapsJS
-    LocationService -- "validates panoramas" --> MetadataAPI
+    ApiLayer -- "REST API" --> RestApi
+    GameUI -- "render Street View" --> MapsJS
+    LocationService -- "metadata validation" --> MetadataAPI
     GameEngine --> Postgres
     LocationService --> Postgres
 ```
