@@ -6,44 +6,43 @@ Players get five Toronto Street View locations, place guesses on a map, and earn
 
 ## Stack
 
-- `frontend/`: Next.js 15 App Router app
-- `backend/`: Small Node API used locally and in Vercel Functions
-- Supabase: Verified location cache, game sessions, leaderboard data
-- Google Maps / Google Street View: gameplay map, Street View rendering, review tooling
+- Frontend (`frontend/`): Next.js, React, Tailwind CSS
+- Backend (`backend/`): Node.js, Vercel Functions
+- Database: Supabase (PostgreSQL)
+- External APIs: Google Maps JavaScript API, Google Street View Metadata API
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Browser["Browser · Next.js frontend"]
-        Pages["App router pages<br/>(landing, game, leaderboard, admin)"]
+    subgraph Frontend["Frontend (Next.js on Vercel)"]
+        Pages["Frontend Pages<br/>(landing, game, leaderboard, admin)"]
         GameUI["Game UI<br/>(Street View panorama + guess map)"]
-        ApiClient["API client<br/>(lib/api.ts, REST + JSON)"]
-        Pages --> ApiClient
-        GameUI --> ApiClient
+        ApiLayer["API Layer<br/>(backend communication)"]
+        Pages --> ApiLayer
+        GameUI --> ApiLayer
     end
 
-    subgraph Backend["Node backend (Vercel Functions or local server)"]
-        Router["Router<br/>(REST routes, admin token gate)"]
-        GameStore["Game store<br/>(sessions, scoring, leaderboard)"]
-        LocationService["Location service<br/>(round selection, review queue)"]
-        SupabaseClient["Supabase client<br/>(PostgREST, service role)"]
-        Router --> GameStore
-        Router --> LocationService
-        GameStore --> SupabaseClient
-        LocationService --> SupabaseClient
+    subgraph Backend["Backend API (Node.js on Vercel Functions)<br/>Stateless Serverless Functions"]
+        RestApi["REST API<br/>(request routing + admin auth)"]
+        GameEngine["Game Engine<br/>Game Session Management<br/>Scoring Logic<br/>Leaderboard"]
+        LocationService["Location Service<br/>Random Round Selection<br/>Street View Validation<br/>Admin Review Workflow"]
+        RestApi --> GameEngine
+        RestApi --> LocationService
     end
 
-    subgraph External["External services"]
-        MapsJS["Google Maps JS API<br/>(maps + Street View rendering)"]
-        MetadataAPI["Street View metadata API<br/>(panorama validation)"]
-        Postgres[("Supabase Postgres<br/>verified_locations, game_sessions")]
+    subgraph ExternalAPIs["External APIs"]
+        MapsJS["Google Maps JavaScript API<br/>(map + Street View rendering)"]
+        MetadataAPI["Google Street View Metadata API<br/>(panorama validation)"]
     end
 
-    ApiClient -- "REST /api" --> Router
+    Postgres[("PostgreSQL Database<br/>Hosted on Supabase")]
+
+    ApiLayer -- "REST + JSON" --> RestApi
     GameUI -- "renders panoramas" --> MapsJS
     LocationService -- "validates panoramas" --> MetadataAPI
-    SupabaseClient --> Postgres
+    GameEngine --> Postgres
+    LocationService --> Postgres
 ```
 
 Key flows:
