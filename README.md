@@ -349,43 +349,42 @@ Right now the repo can use the same Google key on both frontend and backend, but
 
 ```mermaid
 flowchart TB
-    subgraph Browser["Browser (Next.js Frontend)"]
-        Pages["App Router Pages<br/>(Landing, Game, Leaderboard, Admin)"]
-        UI["Game UI<br/>(Street View + Guess Map)"]
-        Client["REST API Client"]
+    subgraph Frontend["Frontend (Next.js on Vercel)"]
+        Pages["Frontend Pages<br/>(Landing, Game, Leaderboard, Admin)"]
+        UI["Game UI<br/>(Street View Panorama + Guess Map)"]
+        Client["API Layer<br/>(Backend Communication)"]
 
         Pages --> Client
         UI --> Client
     end
 
-    subgraph Backend["Backend (Node.js + Vercel Functions)"]
-        API["REST API"]
+    subgraph Backend["Backend API (Node.js deployed as Vercel Functions)<br/>Stateless Serverless Functions"]
+        API["REST API<br/>(Request Routing + Admin Auth)"]
 
-        Game["Game Service<br/>(Sessions, Scoring, Leaderboard)"]
+        Game["Game Engine<br/>Game Session Management<br/>Scoring Logic<br/>Leaderboard"]
 
-        Location["Location Service<br/>(Round Selection,<br/>Panorama Validation,<br/>Review Queue)"]
-
-        DB["Supabase Client"]
+        Location["Location Service<br/>Random Round Selection<br/>Street View Validation<br/>Admin Review Workflow"]
 
         API --> Game
         API --> Location
-        Game --> DB
-        Location --> DB
     end
 
-    subgraph External["External Services"]
-        Maps["Google Maps JavaScript API<br/>(Street View Rendering)"]
+    subgraph DataLayer["Database & External APIs"]
+        Postgres[("PostgreSQL Database<br/>verified_locations<br/>game_sessions")]
 
-        Metadata["Street View Metadata API<br/>(Panorama Validation)"]
+        Maps["Google Maps JavaScript API<br/>(Map + Street View Rendering)"]
 
-        Postgres[("Supabase PostgreSQL<br/>verified_locations<br/>game_sessions")]
+        Metadata["Google Street View Metadata API<br/>(Panorama Validation)"]
     end
 
-    Client -- "REST /api" --> API
+    Client -- "REST + JSON" --> API
     UI -- "Loads panoramas" --> Maps
     Location -- "Validates panoramas" --> Metadata
-    DB --> Postgres
+    Game --> Postgres
+    Location --> Postgres
 ```
+
+> **Design Principle:** The frontend is responsible for rendering the user experience, while the backend contains all business logic, persistence, and location validation through stateless serverless functions.
 
 ```mermaid
 sequenceDiagram
