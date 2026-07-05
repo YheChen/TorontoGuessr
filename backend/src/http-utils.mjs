@@ -8,6 +8,9 @@ export function setCorsHeaders(response) {
     "Access-Control-Allow-Methods",
     "GET,POST,PATCH,DELETE,OPTIONS"
   );
+  // Let browsers cache the preflight so gameplay POSTs pay it at most once
+  // per day instead of before every request.
+  response.setHeader("Access-Control-Max-Age", "86400");
 }
 
 export function sendJson(response, statusCode, payload) {

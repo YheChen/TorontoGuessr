@@ -79,6 +79,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Warm up Google Maps origins before the game page needs them. */}
+        <link rel="preconnect" href="https://maps.googleapis.com" />
+        <link rel="preconnect" href="https://maps.gstatic.com" />
+        <link
+          rel="dns-prefetch"
+          href="https://streetviewpixels-pa.googleapis.com"
+        />
         <script
           defer
           src="https://cloud.umami.is/script.js"

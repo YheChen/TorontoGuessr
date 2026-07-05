@@ -182,7 +182,14 @@ export async function routeRequest(request, response) {
         limit: url.searchParams.get("limit") ?? undefined,
       });
 
-      sendJson(response, 200, await getLeaderboard(query));
+      const leaderboard = await getLeaderboard(query);
+      // Leaderboards tolerate short staleness; let the CDN absorb the reads.
+      // Set only on success so error responses are never cached.
+      response.setHeader(
+        "Cache-Control",
+        "public, s-maxage=30, stale-while-revalidate=60"
+      );
+      sendJson(response, 200, leaderboard);
       return;
     }
 
