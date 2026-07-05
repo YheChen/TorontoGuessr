@@ -7,7 +7,7 @@ Players get five Toronto Street View locations, place guesses on a map, and earn
 ## Stack
 
 - Frontend (`frontend/`): Next.js, React, Tailwind CSS
-- Backend (`backend/`): Node.js, Vercel Functions
+- Backend (`backend/`): Node.js, TypeScript, Vercel Functions
 - Database: Supabase (PostgreSQL)
 - External APIs: Google Maps JavaScript API, Google Street View Metadata API
 
@@ -212,7 +212,7 @@ Admin access is protected by `ADMIN_REVIEW_TOKEN`, which must be sent to the bac
 There are now two ways verified locations can be added:
 
 1. Runtime generation during gameplay if `LOCATION_GENERATION_ENABLED=true`
-2. Manual bulk generation with [backend/scripts/generate-verified-locations.mjs](backend/scripts/generate-verified-locations.mjs)
+2. Manual bulk generation with [backend/scripts/generate-verified-locations.ts](backend/scripts/generate-verified-locations.ts)
 
 To generate `100` more verified locations:
 

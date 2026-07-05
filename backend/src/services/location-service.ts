@@ -5,8 +5,17 @@ import {
   selectRows,
   selectSingleRow,
   updateSingleRow,
-} from "../supabase.mjs";
-import { getValidatedPanorama } from "./streetview-service.mjs";
+} from "../supabase";
+import { getValidatedPanorama } from "./streetview-service";
+import { createHttpError } from "../http-utils";
+import {
+  REVIEW_STATUSES,
+  type GameRound,
+  type LatLng,
+  type ReviewAction,
+  type VerifiedLocation,
+  type VerifiedLocationRow,
+} from "../types";
 
 const TORONTO_BOUNDS = {
   north: 43.679751,
@@ -22,13 +31,14 @@ const locationGenerationEnabled =
   process.env.LOCATION_GENERATION_ENABLED !== "false";
 let locationWritesEnabled = true;
 let hasWarnedAboutWriteFailures = false;
-const REVIEW_STATUSES = {
-  PENDING: "pending",
-  REJECTED: "rejected",
-  ACCEPTED: "accepted",
-};
 
-function generateRandomLocation() {
+interface PlayableLocation {
+  lat: number;
+  lng: number;
+  panoId: string;
+}
+
+function generateRandomLocation(): LatLng {
   const lat =
     Math.random() * (TORONTO_BOUNDS.north - TORONTO_BOUNDS.south) +
     TORONTO_BOUNDS.south;
@@ -39,11 +49,11 @@ function generateRandomLocation() {
   return { lat, lng };
 }
 
-function shuffle(items) {
+function shuffle<T>(items: T[]): T[] {
   return [...items].sort(() => 0.5 - Math.random());
 }
 
-function toRound(location) {
+function toRound(location: PlayableLocation): GameRound {
   return {
     lat: location.lat,
     lng: location.lng,
@@ -54,7 +64,7 @@ function toRound(location) {
   };
 }
 
-function mapVerifiedLocationRow(row) {
+function mapVerifiedLocationRow(row: VerifiedLocationRow): VerifiedLocation {
   return {
     id: row.id,
     lat: row.lat,
@@ -67,7 +77,7 @@ function mapVerifiedLocationRow(row) {
   };
 }
 
-function disableLocationWrites(error) {
+function disableLocationWrites(error: unknown): void {
   locationWritesEnabled = false;
 
   if (hasWarnedAboutWriteFailures) {
@@ -75,14 +85,17 @@ function disableLocationWrites(error) {
   }
 
   hasWarnedAboutWriteFailures = true;
-  const message = error instanceof Error ? error.message : "Unexpected write failure.";
+  const message =
+    error instanceof Error ? error.message : "Unexpected write failure.";
 
   console.warn(
     `[location-service] Supabase writes disabled for this process: ${message}`
   );
 }
 
-async function normalizeStoredLocation(candidate) {
+async function normalizeStoredLocation(
+  candidate: VerifiedLocation
+): Promise<PlayableLocation | null> {
   if (candidate.panoId) {
     return {
       lat: candidate.lat,
@@ -102,7 +115,7 @@ async function normalizeStoredLocation(candidate) {
 
   if (locationWritesEnabled) {
     try {
-      await updateSingleRow(
+      await updateSingleRow<VerifiedLocationRow>(
         VERIFIED_LOCATIONS_TABLE,
         {
           lat: validated.lat,
@@ -123,7 +136,7 @@ async function normalizeStoredLocation(candidate) {
   return validated;
 }
 
-async function createVerifiedLocation() {
+async function createVerifiedLocation(): Promise<PlayableLocation> {
   for (let attempt = 0; attempt < 25; attempt += 1) {
     const candidate = generateRandomLocation();
     const validated = await getValidatedPanorama(candidate);
@@ -134,7 +147,7 @@ async function createVerifiedLocation() {
 
     if (locationWritesEnabled) {
       try {
-        await insertRow(
+        await insertRow<VerifiedLocationRow>(
           VERIFIED_LOCATIONS_TABLE,
           {
             lat: validated.lat,
@@ -157,9 +170,9 @@ async function createVerifiedLocation() {
   throw new Error("Unable to generate a verified Toronto location.");
 }
 
-export async function selectGameRounds(count = 5) {
+export async function selectGameRounds(count = 5): Promise<GameRound[]> {
   const allCachedLocations = (
-    await selectRows(VERIFIED_LOCATIONS_TABLE, {
+    await selectRows<VerifiedLocationRow>(VERIFIED_LOCATIONS_TABLE, {
       columns: VERIFIED_LOCATION_COLUMNS,
     })
   ).map(mapVerifiedLocationRow);
@@ -167,21 +180,19 @@ export async function selectGameRounds(count = 5) {
     ...shuffle(
       allCachedLocations.filter(
         (row) =>
-          row.manuallyVerified &&
-          row.reviewStatus !== REVIEW_STATUSES.REJECTED
+          row.manuallyVerified && row.reviewStatus !== REVIEW_STATUSES.REJECTED
       )
     ),
     ...shuffle(
       allCachedLocations.filter(
         (row) =>
-          !row.manuallyVerified &&
-          row.reviewStatus !== REVIEW_STATUSES.REJECTED
+          !row.manuallyVerified && row.reviewStatus !== REVIEW_STATUSES.REJECTED
       )
     ),
   ];
 
-  const rounds = [];
-  const seenPanoramas = new Set();
+  const rounds: GameRound[] = [];
+  const seenPanoramas = new Set<string>();
 
   for (const candidate of cachedLocations) {
     if (rounds.length >= count) {
@@ -220,7 +231,15 @@ export async function selectGameRounds(count = 5) {
   return rounds;
 }
 
-export async function getLocationReviewQueue({ index = 0, locationId = null } = {}) {
+interface ReviewQueueQuery {
+  index?: number;
+  locationId?: string | null;
+}
+
+export async function getLocationReviewQueue({
+  index = 0,
+  locationId = null,
+}: ReviewQueueQuery = {}) {
   const pendingFilters = {
     manually_verified: false,
     review_status: REVIEW_STATUSES.PENDING,
@@ -236,12 +255,12 @@ export async function getLocationReviewQueue({ index = 0, locationId = null } = 
       },
     }),
     locationId
-      ? selectRows(VERIFIED_LOCATIONS_TABLE, {
+      ? selectRows<Pick<VerifiedLocationRow, "id">>(VERIFIED_LOCATIONS_TABLE, {
           columns: "id",
           filters: pendingFilters,
           order: "created_at.asc",
         })
-      : Promise.resolve([]),
+      : Promise.resolve<Array<Pick<VerifiedLocationRow, "id">>>([]),
   ]);
 
   const resolvedIndex =
@@ -253,7 +272,7 @@ export async function getLocationReviewQueue({ index = 0, locationId = null } = 
   const entryRecord =
     total === 0
       ? null
-      : await selectSingleRow(VERIFIED_LOCATIONS_TABLE, {
+      : await selectSingleRow<VerifiedLocationRow>(VERIFIED_LOCATIONS_TABLE, {
           columns: VERIFIED_LOCATION_COLUMNS,
           filters: pendingFilters,
           order: "created_at.asc",
@@ -271,7 +290,10 @@ export async function getLocationReviewQueue({ index = 0, locationId = null } = 
   };
 }
 
-export async function updateLocationReviewStatus(locationId, action) {
+export async function updateLocationReviewStatus(
+  locationId: string,
+  action: ReviewAction
+): Promise<VerifiedLocation> {
   const updates =
     action === "accept"
       ? {
@@ -288,7 +310,7 @@ export async function updateLocationReviewStatus(locationId, action) {
             review_status: REVIEW_STATUSES.PENDING,
           };
 
-  const updatedRecord = await updateSingleRow(
+  const updatedRecord = await updateSingleRow<VerifiedLocationRow>(
     VERIFIED_LOCATIONS_TABLE,
     updates,
     {
@@ -298,22 +320,23 @@ export async function updateLocationReviewStatus(locationId, action) {
   );
 
   if (!updatedRecord) {
-    const error = new Error("Verified location not found.");
-    error.statusCode = 404;
-    throw error;
+    throw createHttpError(404, "Verified location not found.");
   }
 
   return mapVerifiedLocationRow(updatedRecord);
 }
 
 export async function deleteRejectedLocations() {
-  const deletedRows = await deleteRows(VERIFIED_LOCATIONS_TABLE, {
-    filters: {
-      manually_verified: false,
-      review_status: REVIEW_STATUSES.REJECTED,
-    },
-    columns: "id",
-  });
+  const deletedRows = await deleteRows<Pick<VerifiedLocationRow, "id">>(
+    VERIFIED_LOCATIONS_TABLE,
+    {
+      filters: {
+        manually_verified: false,
+        review_status: REVIEW_STATUSES.REJECTED,
+      },
+      columns: "id",
+    }
+  );
 
   return {
     deletedCount: deletedRows.length,

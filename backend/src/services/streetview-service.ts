@@ -1,10 +1,21 @@
-import { loadEnv } from "../env.mjs";
+import { loadEnv } from "../env";
+import type { LatLng, ValidatedPanorama } from "../types";
 
 loadEnv();
 
 const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-export async function fetchStreetViewMetadata({ lat, lng }) {
+interface StreetViewMetadata {
+  status: string;
+  pano_id?: string;
+  location?: { lat?: number; lng?: number };
+  copyright?: string;
+}
+
+export async function fetchStreetViewMetadata({
+  lat,
+  lng,
+}: LatLng): Promise<StreetViewMetadata> {
   if (!GOOGLE_API_KEY) {
     throw new Error("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for backend.");
   }
@@ -20,10 +31,12 @@ export async function fetchStreetViewMetadata({ lat, lng }) {
     throw new Error(`Street View metadata request failed with ${response.status}.`);
   }
 
-  return response.json();
+  return (await response.json()) as StreetViewMetadata;
 }
 
-export async function getValidatedPanorama(location) {
+export async function getValidatedPanorama(
+  location: LatLng
+): Promise<ValidatedPanorama | null> {
   const metadata = await fetchStreetViewMetadata(location);
   if (metadata.status !== "OK" || !metadata.pano_id) {
     return null;

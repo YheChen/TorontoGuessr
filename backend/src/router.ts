@@ -1,30 +1,33 @@
 import { URL } from "node:url";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import {
   createGameSession,
-  LEADERBOARD_PERIODS,
   getGameSummary,
   getDailyGameStats,
   getLeaderboard,
   getRoundForClient,
   saveUsername,
   submitGuess,
-} from "./game-store.mjs";
+} from "./game-store";
 import {
   deleteRejectedLocations,
   getLocationReviewQueue,
+  selectGameRounds,
   updateLocationReviewStatus,
-} from "./services/location-service.mjs";
+} from "./services/location-service";
 import {
+  createHttpError,
+  isHttpError,
   matchRoute,
   normalizePathname,
   readBody,
   sendError,
   sendJson,
   setCorsHeaders,
-} from "./http-utils.mjs";
-import { selectGameRounds } from "./services/location-service.mjs";
-import { sanitizeUsername } from "./username-utils.mjs";
+} from "./http-utils";
+import { LEADERBOARD_PERIODS } from "./types";
+import { sanitizeUsername } from "./username-utils";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -56,13 +59,7 @@ const gameStatsQuerySchema = z.object({
   timeZone: z.string().trim().min(1).max(100).optional(),
 });
 
-function createHttpError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-function requireAdminToken(request) {
+function requireAdminToken(request: IncomingMessage): void {
   const expectedToken = process.env.ADMIN_REVIEW_TOKEN?.trim();
 
   if (!expectedToken) {
@@ -85,7 +82,10 @@ function requireAdminToken(request) {
   }
 }
 
-export async function routeRequest(request, response) {
+export async function routeRequest(
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<void> {
   setCorsHeaders(response);
 
   if (request.method === "OPTIONS") {
@@ -140,7 +140,7 @@ export async function routeRequest(request, response) {
     }
 
     const guessParams = matchRoute(pathname, "/games/:sessionId/guess");
-    if (request.method === "POST" && guessParams) {
+    if (request.method === "POST" && guessParams?.sessionId) {
       const parsedBody = guessSchema.parse(await readBody(request));
       const result = await submitGuess(
         guessParams.sessionId,
@@ -151,7 +151,7 @@ export async function routeRequest(request, response) {
     }
 
     const nextParams = matchRoute(pathname, "/games/:sessionId/next");
-    if (request.method === "POST" && nextParams) {
+    if (request.method === "POST" && nextParams?.sessionId) {
       const nextRound = await getRoundForClient(nextParams.sessionId);
       if (nextRound === null) {
         sendJson(response, 200, {
@@ -166,7 +166,7 @@ export async function routeRequest(request, response) {
     }
 
     const usernameParams = matchRoute(pathname, "/games/:sessionId/username");
-    if (request.method === "POST" && usernameParams) {
+    if (request.method === "POST" && usernameParams?.sessionId) {
       const parsedBody = usernameSchema.parse(await readBody(request));
       const username = sanitizeUsername(parsedBody.username);
       sendJson(response, 200, {
@@ -207,7 +207,7 @@ export async function routeRequest(request, response) {
       pathname,
       "/admin/review-locations/:locationId"
     );
-    if (request.method === "PATCH" && adminReviewParams) {
+    if (request.method === "PATCH" && adminReviewParams?.locationId) {
       requireAdminToken(request);
       const parsedBody = adminLocationReviewActionSchema.parse(
         await readBody(request)
@@ -229,12 +229,7 @@ export async function routeRequest(request, response) {
       return;
     }
 
-    if (
-      error &&
-      typeof error === "object" &&
-      "statusCode" in error &&
-      typeof error.statusCode === "number"
-    ) {
+    if (isHttpError(error)) {
       sendError(response, error.statusCode, error.message);
       return;
     }

@@ -1,6 +1,7 @@
-import { loadEnv } from "../src/env.mjs";
-import { countRows, insertRow, selectRows } from "../src/supabase.mjs";
-import { getValidatedPanorama } from "../src/services/streetview-service.mjs";
+import { loadEnv } from "../src/env";
+import { countRows, insertRow, selectRows } from "../src/supabase";
+import { getValidatedPanorama } from "../src/services/streetview-service";
+import type { LatLng, VerifiedLocationRow } from "../src/types";
 
 loadEnv();
 
@@ -15,20 +16,20 @@ const TORONTO_BOUNDS = {
   east: -79.350063,
 };
 
-function parseRequestedCount() {
+function parseRequestedCount(): number {
   const rawCount = process.argv[2] ?? String(DEFAULT_GENERATE_COUNT);
   const count = Number.parseInt(rawCount, 10);
 
   if (!Number.isInteger(count) || count <= 0) {
     throw new Error(
-      `Invalid location count "${rawCount}". Provide a positive integer.`,
+      `Invalid location count "${rawCount}". Provide a positive integer.`
     );
   }
 
   return count;
 }
 
-function generateRandomLocation() {
+function generateRandomLocation(): LatLng {
   const lat =
     Math.random() * (TORONTO_BOUNDS.north - TORONTO_BOUNDS.south) +
     TORONTO_BOUNDS.south;
@@ -39,27 +40,32 @@ function generateRandomLocation() {
   return { lat, lng };
 }
 
-async function loadExistingPanoramas() {
-  const rows = await selectRows(VERIFIED_LOCATIONS_TABLE, {
-    columns: "pano_id",
-  });
-
-  return new Set(
-    rows
-      .map((row) =>
-        typeof row.pano_id === "string" ? row.pano_id.trim() : null,
-      )
-      .filter(Boolean),
+async function loadExistingPanoramas(): Promise<Set<string>> {
+  const rows = await selectRows<Pick<VerifiedLocationRow, "pano_id">>(
+    VERIFIED_LOCATIONS_TABLE,
+    {
+      columns: "pano_id",
+    }
   );
+
+  const panoramas = new Set<string>();
+  for (const row of rows) {
+    const panoId = typeof row.pano_id === "string" ? row.pano_id.trim() : "";
+    if (panoId) {
+      panoramas.add(panoId);
+    }
+  }
+
+  return panoramas;
 }
 
-async function main() {
+async function main(): Promise<void> {
   const requestedCount = parseRequestedCount();
   const existingPanoramas = await loadExistingPanoramas();
   const beforeCount = await countRows(VERIFIED_LOCATIONS_TABLE);
   const maxAttempts = Math.max(
     requestedCount * MAX_ATTEMPTS_MULTIPLIER,
-    requestedCount + 25,
+    requestedCount + 25
   );
 
   let insertedCount = 0;
@@ -70,7 +76,7 @@ async function main() {
   while (insertedCount < requestedCount) {
     if (attempts >= maxAttempts) {
       throw new Error(
-        `Stopped after ${attempts} attempts. Inserted ${insertedCount}/${requestedCount} new locations.`,
+        `Stopped after ${attempts} attempts. Inserted ${insertedCount}/${requestedCount} new locations.`
       );
     }
 
@@ -89,7 +95,7 @@ async function main() {
       continue;
     }
 
-    await insertRow(
+    await insertRow<Pick<VerifiedLocationRow, "id" | "pano_id">>(
       VERIFIED_LOCATIONS_TABLE,
       {
         lat: validated.lat,
@@ -98,7 +104,7 @@ async function main() {
       },
       {
         columns: "id,pano_id",
-      },
+      }
     );
 
     existingPanoramas.add(validated.panoId);
@@ -109,7 +115,7 @@ async function main() {
       insertedCount === requestedCount
     ) {
       console.log(
-        `Inserted ${insertedCount}/${requestedCount} new verified locations...`,
+        `Inserted ${insertedCount}/${requestedCount} new verified locations...`
       );
     }
   }
@@ -124,7 +130,7 @@ async function main() {
   console.log(`Skipped invalid Street View candidates: ${invalidCandidates}`);
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   const message =
     error instanceof Error ? error.message : "Unexpected generation failure.";
   console.error(message);

@@ -20,7 +20,7 @@ const BLOCKED_USERNAME_PATTERNS = [
   "whore",
 ];
 
-function normalizeLeetspeak(value) {
+function normalizeLeetspeak(value: string): string {
   return value
     .toLowerCase()
     .replace(/0/g, "o")
@@ -31,11 +31,14 @@ function normalizeLeetspeak(value) {
     .replace(/7/g, "t");
 }
 
-export function createGuestUsername() {
+export function createGuestUsername(): string {
   return `Guest ${String(randomInt(0, 10000)).padStart(4, "0")}`;
 }
 
-export function resolveDefaultUsername(value, stableSeed = "") {
+export function resolveDefaultUsername(
+  value: string | null | undefined,
+  stableSeed = ""
+): string {
   if (value && value !== LEGACY_DEFAULT_USERNAME) {
     return value;
   }
@@ -52,7 +55,7 @@ export function resolveDefaultUsername(value, stableSeed = "") {
   return `Guest ${suffix}`;
 }
 
-export function sanitizeUsername(value) {
+export function sanitizeUsername(value: unknown): string {
   const trimmedValue = typeof value === "string" ? value.trim() : "";
 
   if (!trimmedValue) {

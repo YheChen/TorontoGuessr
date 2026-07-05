@@ -1,30 +1,48 @@
 import { randomUUID } from "node:crypto";
-import { calculateDistance, calculateScore } from "./scoring-service.mjs";
+import { calculateDistance, calculateScore } from "./scoring-service";
 import {
   countRows,
   insertRow,
   selectRows,
   selectSingleRow,
   updateSingleRow,
-} from "./supabase.mjs";
+  type Filters,
+} from "./supabase";
 import {
   createGuestUsername,
   resolveDefaultUsername,
-} from "./username-utils.mjs";
+} from "./username-utils";
+import type {
+  GameRound,
+  GameSession,
+  GameSessionRecord,
+  LatLng,
+  LeaderboardPeriod,
+  RoundResult,
+} from "./types";
+
+export { LEADERBOARD_PERIODS } from "./types";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
 const GAME_SESSION_COLUMNS =
   "id,username,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
-export const LEADERBOARD_PERIODS = [
-  "lifetime",
-  "daily",
-  "weekly",
-  "monthly",
-];
 const DEFAULT_STATS_DAYS = 30;
 const DEFAULT_STATS_TIME_ZONE = "America/Toronto";
 
-function getLeaderboardSince(period) {
+interface RoundPayload {
+  currentRound: number;
+  totalRounds: number;
+  round: Pick<GameRound, "panoId" | "heading" | "pitch" | "zoom">;
+  timeLimit: number;
+}
+
+interface DailyStatsEntry {
+  date: string;
+  gamesStarted: number;
+  gamesFinished: number;
+}
+
+function getLeaderboardSince(period: LeaderboardPeriod): string | null {
   const now = Date.now();
 
   switch (period) {
@@ -39,8 +57,11 @@ function getLeaderboardSince(period) {
   }
 }
 
-function buildRoundPayload(session) {
+function buildRoundPayload(session: GameSession): RoundPayload {
   const round = session.rounds[session.currentRoundIndex];
+  if (!round) {
+    throw new Error("No active round found for this session.");
+  }
 
   return {
     currentRound: session.currentRoundIndex + 1,
@@ -55,7 +76,7 @@ function buildRoundPayload(session) {
   };
 }
 
-function mapSessionRecord(record) {
+function mapSessionRecord(record: GameSessionRecord): GameSession {
   return {
     id: record.id,
     username: resolveDefaultUsername(record.username, record.id),
@@ -71,7 +92,7 @@ function mapSessionRecord(record) {
   };
 }
 
-function buildSessionInsert(session) {
+function buildSessionInsert(session: GameSession): Record<string, unknown> {
   return {
     id: session.id,
     username: session.username,
@@ -87,7 +108,7 @@ function buildSessionInsert(session) {
   };
 }
 
-function isValidTimeZone(timeZone) {
+function isValidTimeZone(timeZone: string): boolean {
   try {
     new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
     return true;
@@ -96,7 +117,10 @@ function isValidTimeZone(timeZone) {
   }
 }
 
-function getDateKeyParts(value, timeZone) {
+function getDateKeyParts(
+  value: string | number | Date,
+  timeZone: string
+): { year: string; month: string; day: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -115,19 +139,19 @@ function getDateKeyParts(value, timeZone) {
   return { year, month, day };
 }
 
-function getDateKey(value, timeZone) {
+function getDateKey(value: string | number | Date, timeZone: string): string {
   const { year, month, day } = getDateKeyParts(value, timeZone);
   return `${year}-${month}-${day}`;
 }
 
-function formatUtcDateKey(date) {
+function formatUtcDateKey(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function createDailySeries(days, timeZone) {
+function createDailySeries(days: number, timeZone: string): DailyStatsEntry[] {
   const todayParts = getDateKeyParts(new Date(), timeZone);
   const today = new Date(
     Date.UTC(
@@ -136,7 +160,7 @@ function createDailySeries(days, timeZone) {
       Number(todayParts.day)
     )
   );
-  const series = [];
+  const series: DailyStatsEntry[] = [];
 
   for (let index = days - 1; index >= 0; index -= 1) {
     const current = new Date(today);
@@ -152,11 +176,14 @@ function createDailySeries(days, timeZone) {
   return series;
 }
 
-async function requireGameSession(sessionId) {
-  const record = await selectSingleRow(GAME_SESSIONS_TABLE, {
-    columns: GAME_SESSION_COLUMNS,
-    filters: { id: sessionId },
-  });
+async function requireGameSession(sessionId: string): Promise<GameSession> {
+  const record = await selectSingleRow<GameSessionRecord>(
+    GAME_SESSIONS_TABLE,
+    {
+      columns: GAME_SESSION_COLUMNS,
+      filters: { id: sessionId },
+    }
+  );
 
   if (!record) {
     throw new Error("Game session not found.");
@@ -165,8 +192,10 @@ async function requireGameSession(sessionId) {
   return mapSessionRecord(record);
 }
 
-export async function createGameSession(rounds) {
-  const session = {
+export async function createGameSession(
+  rounds: GameRound[]
+): Promise<GameSession> {
+  const session: GameSession = {
     id: randomUUID(),
     username: createGuestUsername(),
     rounds,
@@ -180,14 +209,20 @@ export async function createGameSession(rounds) {
     completedAt: null,
   };
 
-  const record = await insertRow(GAME_SESSIONS_TABLE, buildSessionInsert(session), {
-    columns: GAME_SESSION_COLUMNS,
-  });
+  const record = await insertRow<GameSessionRecord>(
+    GAME_SESSIONS_TABLE,
+    buildSessionInsert(session),
+    {
+      columns: GAME_SESSION_COLUMNS,
+    }
+  );
 
   return mapSessionRecord(record);
 }
 
-export async function getRoundForClient(sessionId) {
+export async function getRoundForClient(
+  sessionId: string
+): Promise<RoundPayload | null> {
   const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     return null;
@@ -196,7 +231,10 @@ export async function getRoundForClient(sessionId) {
   return buildRoundPayload(session);
 }
 
-export async function submitGuess(sessionId, guessLocation = null) {
+export async function submitGuess(
+  sessionId: string,
+  guessLocation: LatLng | null = null
+) {
   const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     throw new Error("Game session is already complete.");
@@ -220,7 +258,7 @@ export async function submitGuess(sessionId, guessLocation = null) {
 
   const score = distance === null ? 0 : calculateScore(distance);
 
-  const result = {
+  const result: RoundResult = {
     roundNumber: roundIndex + 1,
     score,
     distance,
@@ -242,7 +280,7 @@ export async function submitGuess(sessionId, guessLocation = null) {
     session.completedAt = new Date().toISOString();
   }
 
-  const updatedRecord = await updateSingleRow(
+  const updatedRecord = await updateSingleRow<GameSessionRecord>(
     GAME_SESSIONS_TABLE,
     {
       current_round_index: session.currentRoundIndex,
@@ -276,7 +314,7 @@ export async function submitGuess(sessionId, guessLocation = null) {
   };
 }
 
-export async function getGameSummary(sessionId) {
+export async function getGameSummary(sessionId: string) {
   const session = await requireGameSession(sessionId);
   return {
     username: session.username,
@@ -285,14 +323,14 @@ export async function getGameSummary(sessionId) {
   };
 }
 
-export async function saveUsername(sessionId, username) {
+export async function saveUsername(sessionId: string, username: string) {
   const session = await requireGameSession(sessionId);
 
   if (session.status !== "finished") {
     throw new Error("You can only save a username after finishing the game.");
   }
 
-  const updatedRecord = await updateSingleRow(
+  const updatedRecord = await updateSingleRow<GameSessionRecord>(
     GAME_SESSIONS_TABLE,
     {
       username,
@@ -313,13 +351,24 @@ export async function saveUsername(sessionId, username) {
   };
 }
 
+interface LeaderboardQuery {
+  limit?: number;
+  page?: number;
+  period?: LeaderboardPeriod;
+}
+
+type LeaderboardRecord = Pick<
+  GameSessionRecord,
+  "id" | "username" | "total_score" | "rounds_played" | "completed_at"
+>;
+
 export async function getLeaderboard({
   limit = 10,
   page = 1,
   period = "lifetime",
-} = {}) {
+}: LeaderboardQuery = {}) {
   const since = getLeaderboardSince(period);
-  const filters = { status: "finished" };
+  const filters: Filters = { status: "finished" };
   const offset = (page - 1) * limit;
 
   if (since) {
@@ -327,7 +376,7 @@ export async function getLeaderboard({
   }
 
   const [records, total] = await Promise.all([
-    selectRows(GAME_SESSIONS_TABLE, {
+    selectRows<LeaderboardRecord>(GAME_SESSIONS_TABLE, {
       columns: "id,username,total_score,rounds_played,completed_at",
       filters,
       order: "total_score.desc,completed_at.asc",
@@ -358,26 +407,33 @@ export async function getLeaderboard({
   };
 }
 
+interface GameStatsQuery {
+  days?: number;
+  timeZone?: string;
+}
+
 export async function getDailyGameStats({
   days = DEFAULT_STATS_DAYS,
   timeZone = DEFAULT_STATS_TIME_ZONE,
-} = {}) {
+}: GameStatsQuery = {}) {
   const normalizedTimeZone = isValidTimeZone(timeZone)
     ? timeZone
     : DEFAULT_STATS_TIME_ZONE;
   const series = createDailySeries(days, normalizedTimeZone);
   const seriesByDate = new Map(series.map((entry) => [entry.date, entry]));
-  const since = new Date(Date.now() - (days + 2) * 24 * 60 * 60 * 1000).toISOString();
+  const since = new Date(
+    Date.now() - (days + 2) * 24 * 60 * 60 * 1000
+  ).toISOString();
 
   const [startedSessions, finishedSessions] = await Promise.all([
-    selectRows(GAME_SESSIONS_TABLE, {
+    selectRows<Pick<GameSessionRecord, "created_at">>(GAME_SESSIONS_TABLE, {
       columns: "created_at",
       filters: {
         created_at: { op: "gte", value: since },
       },
       order: "created_at.asc",
     }),
-    selectRows(GAME_SESSIONS_TABLE, {
+    selectRows<Pick<GameSessionRecord, "completed_at">>(GAME_SESSIONS_TABLE, {
       columns: "completed_at",
       filters: {
         status: "finished",

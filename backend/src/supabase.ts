@@ -1,11 +1,43 @@
-import { loadEnv } from "./env.mjs";
+import { loadEnv } from "./env";
 
 loadEnv();
 
 const rawSupabaseUrl = process.env.SUPABASE_URL ?? null;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
 
-function getSupabaseBaseUrl() {
+/** PostgREST filter written as an explicit operator, e.g. `{ op: "gte", value: ts }`. */
+export interface FilterOperator {
+  op: string;
+  value: string | number | boolean | null;
+}
+
+export type FilterValue =
+  | string
+  | number
+  | boolean
+  | null
+  | Array<string | number>
+  | FilterOperator;
+
+export type Filters = Record<string, FilterValue>;
+
+export interface QueryOptions {
+  columns?: string;
+  filters?: Filters;
+  order?: string;
+  limit?: number;
+  offset?: number;
+}
+
+interface RequestOptions {
+  method?: string;
+  query?: URLSearchParams;
+  body?: unknown;
+  preferCount?: boolean;
+  preferRepresentation?: boolean;
+}
+
+function getSupabaseBaseUrl(): string {
   if (!rawSupabaseUrl) {
     throw new Error("Missing SUPABASE_URL for backend.");
   }
@@ -13,7 +45,7 @@ function getSupabaseBaseUrl() {
   return rawSupabaseUrl.endsWith("/") ? rawSupabaseUrl : `${rawSupabaseUrl}/`;
 }
 
-function getSupabaseKey() {
+function getSupabaseKey(): string {
   if (!supabaseKey) {
     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY for backend.");
   }
@@ -21,7 +53,16 @@ function getSupabaseKey() {
   return supabaseKey;
 }
 
-function formatFilterValue(value) {
+function isFilterOperator(value: FilterValue): value is FilterOperator {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    "op" in value
+  );
+}
+
+function formatFilterValue(value: FilterOperator["value"] | Array<string | number>): string {
   if (value === null) {
     return "null";
   }
@@ -33,17 +74,18 @@ function formatFilterValue(value) {
   return String(value);
 }
 
-function buildQueryString({ columns = "*", filters = {}, order, limit, offset } = {}) {
+function buildQueryString({
+  columns = "*",
+  filters = {},
+  order,
+  limit,
+  offset,
+}: QueryOptions = {}): URLSearchParams {
   const params = new URLSearchParams();
   params.set("select", columns);
 
   for (const [field, value] of Object.entries(filters)) {
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      "op" in value
-    ) {
+    if (isFilterOperator(value)) {
       params.set(field, `${value.op}.${formatFilterValue(value.value)}`);
       continue;
     }
@@ -71,23 +113,22 @@ function buildQueryString({ columns = "*", filters = {}, order, limit, offset } 
   return params;
 }
 
-async function supabaseRequest(
-  pathname,
+async function performSupabaseRequest(
+  pathname: string,
   {
     method = "GET",
     query,
     body,
     preferCount = false,
     preferRepresentation = false,
-    returnHeaders = false,
-  } = {}
-) {
+  }: RequestOptions = {}
+): Promise<{ payload: unknown; headers: Headers }> {
   const url = new URL(pathname, getSupabaseBaseUrl());
   if (query) {
     url.search = query.toString();
   }
 
-  const headers = {
+  const headers: Record<string, string> = {
     Accept: "application/json",
     apikey: getSupabaseKey(),
     Authorization: `Bearer ${getSupabaseKey()}`,
@@ -116,33 +157,48 @@ async function supabaseRequest(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  const payload =
+  const payload: unknown =
     method === "HEAD" ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const message =
       payload && typeof payload === "object"
-        ? payload.message ?? payload.error_description ?? payload.error
+        ? ((payload as Record<string, unknown>).message ??
+          (payload as Record<string, unknown>).error_description ??
+          (payload as Record<string, unknown>).error)
         : null;
-    throw new Error(message || `Supabase request failed with ${response.status}.`);
+    throw new Error(
+      (typeof message === "string" && message) ||
+        `Supabase request failed with ${response.status}.`
+    );
   }
 
-  if (returnHeaders) {
-    return { payload, headers: response.headers };
-  }
+  return { payload, headers: response.headers };
+}
 
+async function supabaseRequest(
+  pathname: string,
+  options: RequestOptions = {}
+): Promise<unknown> {
+  const { payload } = await performSupabaseRequest(pathname, options);
   return payload;
 }
 
-export async function selectRows(table, options = {}) {
+export async function selectRows<T>(
+  table: string,
+  options: QueryOptions = {}
+): Promise<T[]> {
   const payload = await supabaseRequest(`/rest/v1/${table}`, {
     query: buildQueryString(options),
   });
 
-  return Array.isArray(payload) ? payload : [];
+  return Array.isArray(payload) ? (payload as T[]) : [];
 }
 
-export async function selectSingleRow(table, options = {}) {
-  const rows = await selectRows(table, {
+export async function selectSingleRow<T>(
+  table: string,
+  options: QueryOptions = {}
+): Promise<T | null> {
+  const rows = await selectRows<T>(table, {
     ...options,
     limit: 1,
   });
@@ -150,7 +206,11 @@ export async function selectSingleRow(table, options = {}) {
   return rows[0] ?? null;
 }
 
-export async function insertRow(table, values, { columns = "*" } = {}) {
+export async function insertRow<T>(
+  table: string,
+  values: Record<string, unknown>,
+  { columns = "*" }: { columns?: string } = {}
+): Promise<T> {
   const payload = await supabaseRequest(`/rest/v1/${table}`, {
     method: "POST",
     query: buildQueryString({ columns }),
@@ -161,10 +221,14 @@ export async function insertRow(table, values, { columns = "*" } = {}) {
     throw new Error(`Supabase insert for ${table} did not return a row.`);
   }
 
-  return payload[0];
+  return payload[0] as T;
 }
 
-export async function insertRows(table, values, { columns = "*" } = {}) {
+export async function insertRows<T>(
+  table: string,
+  values: Array<Record<string, unknown>>,
+  { columns = "*" }: { columns?: string } = {}
+): Promise<T[]> {
   if (!Array.isArray(values) || values.length === 0) {
     return [];
   }
@@ -175,14 +239,14 @@ export async function insertRows(table, values, { columns = "*" } = {}) {
     body: values,
   });
 
-  return Array.isArray(payload) ? payload : [];
+  return Array.isArray(payload) ? (payload as T[]) : [];
 }
 
-export async function updateSingleRow(
-  table,
-  values,
-  { filters = {}, columns = "*" } = {}
-) {
+export async function updateSingleRow<T>(
+  table: string,
+  values: Record<string, unknown>,
+  { filters = {}, columns = "*" }: { filters?: Filters; columns?: string } = {}
+): Promise<T | null> {
   const payload = await supabaseRequest(`/rest/v1/${table}`, {
     method: "PATCH",
     query: buildQueryString({ columns, filters }),
@@ -193,11 +257,14 @@ export async function updateSingleRow(
     return null;
   }
 
-  return payload[0] ?? null;
+  return (payload[0] as T) ?? null;
 }
 
-export async function countRows(table, { filters = {} } = {}) {
-  const { headers } = await supabaseRequest(`/rest/v1/${table}`, {
+export async function countRows(
+  table: string,
+  { filters = {} }: { filters?: Filters } = {}
+): Promise<number> {
+  const { headers } = await performSupabaseRequest(`/rest/v1/${table}`, {
     method: "HEAD",
     query: buildQueryString({
       columns: "id",
@@ -205,7 +272,6 @@ export async function countRows(table, { filters = {} } = {}) {
       limit: 1,
     }),
     preferCount: true,
-    returnHeaders: true,
   });
 
   const contentRange = headers.get("content-range");
@@ -221,15 +287,15 @@ export async function countRows(table, { filters = {} } = {}) {
   return total;
 }
 
-export async function deleteRows(
-  table,
-  { filters = {}, columns = "*" } = {}
-) {
+export async function deleteRows<T>(
+  table: string,
+  { filters = {}, columns = "*" }: { filters?: Filters; columns?: string } = {}
+): Promise<T[]> {
   const payload = await supabaseRequest(`/rest/v1/${table}`, {
     method: "DELETE",
     query: buildQueryString({ columns, filters }),
     preferRepresentation: true,
   });
 
-  return Array.isArray(payload) ? payload : [];
+  return Array.isArray(payload) ? (payload as T[]) : [];
 }

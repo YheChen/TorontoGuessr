@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function loadEnv() {
+export function loadEnv(): void {
   const envPath = path.resolve(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) {
     return;
