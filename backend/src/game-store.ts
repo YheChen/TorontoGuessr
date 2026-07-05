@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { calculateDistance, calculateScore } from "./scoring-service";
 import {
+  callRpc,
   countRows,
   insertRow,
   selectRows,
@@ -412,6 +413,35 @@ interface GameStatsQuery {
   timeZone?: string;
 }
 
+/** Row shape returned by the daily_game_stats Postgres function. */
+interface DailyStatsRpcRow {
+  date: string;
+  games_started: number;
+  games_finished: number;
+}
+
+let statsRpcAvailable = true;
+
+function buildStatsResponse(days: number, timeZone: string, series: DailyStatsEntry[]) {
+  const totals = series.reduce(
+    (summary, entry) => ({
+      gamesStarted: summary.gamesStarted + entry.gamesStarted,
+      gamesFinished: summary.gamesFinished + entry.gamesFinished,
+    }),
+    { gamesStarted: 0, gamesFinished: 0 }
+  );
+
+  return {
+    days,
+    timeZone,
+    generatedAt: new Date().toISOString(),
+    rangeStart: series[0]?.date ?? null,
+    rangeEnd: series[series.length - 1]?.date ?? null,
+    totals,
+    series,
+  };
+}
+
 export async function getDailyGameStats({
   days = DEFAULT_STATS_DAYS,
   timeZone = DEFAULT_STATS_TIME_ZONE,
@@ -419,6 +449,44 @@ export async function getDailyGameStats({
   const normalizedTimeZone = isValidTimeZone(timeZone)
     ? timeZone
     : DEFAULT_STATS_TIME_ZONE;
+
+  // Prefer the SQL aggregate: exact counts regardless of row volume, and one
+  // round trip instead of two capped row scans.
+  if (statsRpcAvailable) {
+    try {
+      const rows = await callRpc<DailyStatsRpcRow[]>("daily_game_stats", {
+        days_count: days,
+        tz: normalizedTimeZone,
+      });
+
+      const series: DailyStatsEntry[] = rows.map((row) => ({
+        date: row.date,
+        gamesStarted: row.games_started,
+        gamesFinished: row.games_finished,
+      }));
+
+      return buildStatsResponse(days, normalizedTimeZone, series);
+    } catch (error) {
+      // Missing function (migration not applied yet) or transient failure:
+      // fall back to the legacy row scan so stats keep working.
+      statsRpcAvailable = false;
+      const message =
+        error instanceof Error ? error.message : "Unknown RPC failure.";
+      console.warn(
+        `[game-store] daily_game_stats RPC unavailable, using row-scan fallback (capped at 1000 rows per query): ${message}`
+      );
+    }
+  }
+
+  return getDailyGameStatsFromRows(days, normalizedTimeZone);
+}
+
+/**
+ * Legacy fallback: fetch raw rows and bucket them in JS. Subject to
+ * PostgREST's 1,000-row response cap, so counts can undercount on busy
+ * ranges. Used only until the daily_game_stats migration is applied.
+ */
+async function getDailyGameStatsFromRows(days: number, normalizedTimeZone: string) {
   const series = createDailySeries(days, normalizedTimeZone);
   const seriesByDate = new Map(series.map((entry) => [entry.date, entry]));
   const since = new Date(
@@ -465,21 +533,5 @@ export async function getDailyGameStats({
     }
   }
 
-  const totals = series.reduce(
-    (summary, entry) => ({
-      gamesStarted: summary.gamesStarted + entry.gamesStarted,
-      gamesFinished: summary.gamesFinished + entry.gamesFinished,
-    }),
-    { gamesStarted: 0, gamesFinished: 0 }
-  );
-
-  return {
-    days,
-    timeZone: normalizedTimeZone,
-    generatedAt: new Date().toISOString(),
-    rangeStart: series[0]?.date ?? null,
-    rangeEnd: series[series.length - 1]?.date ?? null,
-    totals,
-    series,
-  };
+  return buildStatsResponse(days, normalizedTimeZone, series);
 }

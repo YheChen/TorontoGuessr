@@ -299,3 +299,16 @@ export async function deleteRows<T>(
 
   return Array.isArray(payload) ? (payload as T[]) : [];
 }
+
+/** Call a Postgres function through PostgREST RPC. */
+export async function callRpc<T>(
+  functionName: string,
+  args: Record<string, unknown> = {}
+): Promise<T> {
+  const payload = await supabaseRequest(`/rest/v1/rpc/${functionName}`, {
+    method: "POST",
+    body: args,
+  });
+
+  return payload as T;
+}

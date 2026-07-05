@@ -110,6 +110,8 @@ Gameplay, scoring, leaderboards, statistics, authentication, the admin review wo
 
    If Supabase is warning that RLS is disabled on an existing project, also run [backend/supabase/enable_row_level_security.sql](backend/supabase/enable_row_level_security.sql).
 
+   Also run [backend/supabase/add_stats_function_and_indexes.sql](backend/supabase/add_stats_function_and_indexes.sql). It adds the `daily_game_stats` SQL aggregate (exact stats regardless of row volume) and leaderboard indexes. Without it the backend falls back to a slower row scan whose counts cap at 1,000 sessions per range.
+
 5. Fill in `backend/.env` using [backend/.env.example](backend/.env.example):
 
    ```env
