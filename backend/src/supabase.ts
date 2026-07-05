@@ -1,4 +1,4 @@
-import { loadEnv } from "./env";
+import { loadEnv } from "./env.js";
 
 loadEnv();
 

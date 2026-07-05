@@ -1,5 +1,5 @@
-import { loadEnv } from "../env";
-import type { LatLng, ValidatedPanorama } from "../types";
+import { loadEnv } from "../env.js";
+import type { LatLng, ValidatedPanorama } from "../types.js";
 
 loadEnv();
 

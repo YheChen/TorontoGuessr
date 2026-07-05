@@ -9,13 +9,13 @@ import {
   getRoundForClient,
   saveUsername,
   submitGuess,
-} from "./game-store";
+} from "./game-store.js";
 import {
   deleteRejectedLocations,
   getLocationReviewQueue,
   selectGameRounds,
   updateLocationReviewStatus,
-} from "./services/location-service";
+} from "./services/location-service.js";
 import {
   createHttpError,
   isHttpError,
@@ -25,9 +25,9 @@ import {
   sendError,
   sendJson,
   setCorsHeaders,
-} from "./http-utils";
-import { LEADERBOARD_PERIODS } from "./types";
-import { sanitizeUsername } from "./username-utils";
+} from "./http-utils.js";
+import { LEADERBOARD_PERIODS } from "./types.js";
+import { sanitizeUsername } from "./username-utils.js";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -95,7 +95,17 @@ export async function routeRequest(
   }
 
   const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
-  const pathname = normalizePathname(url.pathname);
+  // The vercel.json rewrite funnels /api/* into this function and carries the
+  // original path in the `path` query parameter. Prefer it when present;
+  // direct requests (local server, tests) keep using the URL path.
+  const forwardedPath = url.searchParams.get("path");
+  const pathname = normalizePathname(
+    forwardedPath
+      ? forwardedPath.startsWith("/")
+        ? forwardedPath
+        : `/${forwardedPath}`
+      : url.pathname
+  );
 
   try {
     if (request.method === "GET" && pathname === "/health") {

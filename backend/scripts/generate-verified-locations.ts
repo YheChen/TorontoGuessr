@@ -1,7 +1,7 @@
-import { loadEnv } from "../src/env";
-import { countRows, insertRow, selectRows } from "../src/supabase";
-import { getValidatedPanorama } from "../src/services/streetview-service";
-import type { LatLng, VerifiedLocationRow } from "../src/types";
+import { loadEnv } from "../src/env.js";
+import { countRows, insertRow, selectRows } from "../src/supabase.js";
+import { getValidatedPanorama } from "../src/services/streetview-service.js";
+import type { LatLng, VerifiedLocationRow } from "../src/types.js";
 
 loadEnv();
 

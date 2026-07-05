@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { calculateDistance, calculateScore } from "./scoring-service";
+import { calculateDistance, calculateScore } from "./scoring-service.js";
 import {
   callRpc,
   countRows,
@@ -8,11 +8,11 @@ import {
   selectSingleRow,
   updateSingleRow,
   type Filters,
-} from "./supabase";
+} from "./supabase.js";
 import {
   createGuestUsername,
   resolveDefaultUsername,
-} from "./username-utils";
+} from "./username-utils.js";
 import type {
   GameRound,
   GameSession,
@@ -20,9 +20,9 @@ import type {
   LatLng,
   LeaderboardPeriod,
   RoundResult,
-} from "./types";
+} from "./types.js";
 
-export { LEADERBOARD_PERIODS } from "./types";
+export { LEADERBOARD_PERIODS } from "./types.js";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
 const GAME_SESSION_COLUMNS =

@@ -1,6 +1,6 @@
 import http from "node:http";
-import { loadEnv } from "./env";
-import { routeRequest } from "./router";
+import { loadEnv } from "./env.js";
+import { routeRequest } from "./router.js";
 
 loadEnv();
 

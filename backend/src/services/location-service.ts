@@ -5,9 +5,9 @@ import {
   selectRows,
   selectSingleRow,
   updateSingleRow,
-} from "../supabase";
-import { getValidatedPanorama } from "./streetview-service";
-import { createHttpError } from "../http-utils";
+} from "../supabase.js";
+import { getValidatedPanorama } from "./streetview-service.js";
+import { createHttpError } from "../http-utils.js";
 import {
   REVIEW_STATUSES,
   type GameRound,
@@ -15,7 +15,7 @@ import {
   type ReviewAction,
   type VerifiedLocation,
   type VerifiedLocationRow,
-} from "../types";
+} from "../types.js";
 
 const TORONTO_BOUNDS = {
   north: 43.679751,
