@@ -58,8 +58,12 @@ export function CountUp({
     };
 
     frame.current = requestAnimationFrame(animate);
+    // rAF is throttled or paused in background tabs; make sure the final
+    // value always lands even if the animation frames never fire.
+    const settle = setTimeout(() => setDisplay(value), duration + 250);
     return () => {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
+      clearTimeout(settle);
     };
   }, [value, duration]);
 

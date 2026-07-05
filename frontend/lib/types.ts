@@ -103,3 +103,22 @@ export interface UpdateLocationReviewResponse {
 export interface DeleteRejectedLocationsResponse {
   deletedCount: number;
 }
+
+export interface DailyGameStatsEntry {
+  date: string;
+  gamesStarted: number;
+  gamesFinished: number;
+}
+
+export interface GameStatsResponse {
+  days: number;
+  timeZone: string;
+  generatedAt: string;
+  rangeStart: string | null;
+  rangeEnd: string | null;
+  totals: {
+    gamesStarted: number;
+    gamesFinished: number;
+  };
+  series: DailyGameStatsEntry[];
+}

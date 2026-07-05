@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Trophy, Info, Play } from "lucide-react";
+import { Menu, X, Trophy, Info, Play, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/site/brand-mark";
 
 const NAV_LINKS = [
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
+  { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/about", label: "About", icon: Info },
 ] as const;
 

@@ -12,6 +12,7 @@ const FOOTER_LINKS: Array<{
     links: [
       { label: "Play", href: "/game" },
       { label: "Leaderboard", href: "/leaderboard" },
+      { label: "Stats", href: "/stats" },
       { label: "About", href: "/about" },
     ],
   },

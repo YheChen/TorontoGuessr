@@ -1,5 +1,6 @@
 import type {
   DeleteRejectedLocationsResponse,
+  GameStatsResponse,
   GuessLocation,
   GuessResponse,
   LeaderboardPeriod,
@@ -132,4 +133,8 @@ export function deleteRejectedLocations(adminToken: string) {
       headers: getAdminHeaders(adminToken),
     }
   );
+}
+
+export function fetchGameStats(days = 30) {
+  return request<GameStatsResponse>(`/stats/games?days=${days}`);
 }
