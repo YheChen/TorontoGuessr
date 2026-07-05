@@ -55,7 +55,7 @@ const adminLocationReviewActionSchema = z.object({
   action: z.enum(["accept", "reject", "undo"]),
 });
 const gameStatsQuerySchema = z.object({
-  days: z.coerce.number().int().min(1).max(365).optional(),
+  days: z.coerce.number().int().min(1).max(3650).optional(),
   timeZone: z.string().trim().min(1).max(100).optional(),
 });
 

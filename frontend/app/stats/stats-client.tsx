@@ -23,13 +23,50 @@ import { cn } from "@/lib/utils";
 import { fetchGameStats } from "@/lib/api";
 import type { GameStatsResponse } from "@/lib/types";
 
-// "All time" uses the API's maximum window of 365 days.
-const RANGE_OPTIONS = [
-  { days: 1, label: "24 hours" },
-  { days: 7, label: "7 days" },
-  { days: 30, label: "30 days" },
-  { days: 365, label: "All time" },
-] as const;
+type RangeKey = "day" | "week" | "month" | "all";
+
+const RANGE_OPTIONS: Array<{ key: RangeKey; label: string }> = [
+  { key: "day", label: "24 hours" },
+  { key: "week", label: "7 days" },
+  { key: "month", label: "30 days" },
+  { key: "all", label: "All time" },
+];
+
+/** The game launched April 1, 2026; "All time" spans from that date. */
+const LAUNCH_DATE_UTC = Date.UTC(2026, 3, 1);
+const API_MAX_DAYS = 3650;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Days from launch through today in Toronto time, inclusive. */
+function daysSinceLaunch(): number {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [year, month, day] = today.split("-").map(Number);
+  if (!year || !month || !day) {
+    return 90;
+  }
+
+  const todayUtc = Date.UTC(year, month - 1, day);
+  const elapsed = Math.floor((todayUtc - LAUNCH_DATE_UTC) / MS_PER_DAY) + 1;
+  return Math.min(Math.max(elapsed, 1), API_MAX_DAYS);
+}
+
+function rangeToDays(range: RangeKey): number {
+  switch (range) {
+    case "day":
+      return 1;
+    case "week":
+      return 7;
+    case "month":
+      return 30;
+    case "all":
+      return daysSinceLaunch();
+  }
+}
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -61,7 +98,7 @@ function formatDay(value: string): string {
 }
 
 export function StatsClient() {
-  const [days, setDays] = useState<number>(30);
+  const [range, setRange] = useState<RangeKey>("month");
   const [stats, setStats] = useState<GameStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,7 +112,7 @@ export function StatsClient() {
       setErrorMessage(null);
 
       try {
-        const response = await fetchGameStats(days);
+        const response = await fetchGameStats(rangeToDays(range));
         if (!isCancelled) {
           setStats(response);
         }
@@ -99,7 +136,7 @@ export function StatsClient() {
     return () => {
       isCancelled = true;
     };
-  }, [days, reloadKey]);
+  }, [range, reloadKey]);
 
   const totals = stats?.totals ?? { gamesStarted: 0, gamesFinished: 0 };
   const completionRate =
@@ -139,12 +176,12 @@ export function StatsClient() {
         <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:self-auto">
           <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
           {RANGE_OPTIONS.map((option) => {
-            const isActive = option.days === days;
+            const isActive = option.key === range;
             return (
               <button
-                key={option.days}
+                key={option.key}
                 type="button"
-                onClick={() => setDays(option.days)}
+                onClick={() => setRange(option.key)}
                 aria-pressed={isActive}
                 className={cn(
                   "whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-all",
