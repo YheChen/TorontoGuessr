@@ -8,12 +8,14 @@
   "devDependencies": {
     "@types/node": "^22",
     "tsx": "^4.19.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
     "generate:verified-locations": "tsx scripts/generate-verified-locations.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "test": "vitest run"
   }
 }
