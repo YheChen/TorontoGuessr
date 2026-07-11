@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { calculateDistance, calculateScore } from "./scoring-service.js";
 import {
   callRpc,
@@ -414,11 +415,11 @@ interface GameStatsQuery {
 }
 
 /** Row shape returned by the daily_game_stats Postgres function. */
-interface DailyStatsRpcRow {
-  date: string;
-  games_started: number;
-  games_finished: number;
-}
+const dailyStatsRpcRowSchema = z.object({
+  date: z.string(),
+  games_started: z.number().int(),
+  games_finished: z.number().int(),
+});
 
 let statsRpcAvailable = true;
 
@@ -454,10 +455,11 @@ export async function getDailyGameStats({
   // round trip instead of two capped row scans.
   if (statsRpcAvailable) {
     try {
-      const rows = await callRpc<DailyStatsRpcRow[]>("daily_game_stats", {
+      const payload = await callRpc<unknown>("daily_game_stats", {
         days_count: days,
         tz: normalizedTimeZone,
       });
+      const rows = z.array(dailyStatsRpcRowSchema).parse(payload);
 
       const series: DailyStatsEntry[] = rows.map((row) => ({
         date: row.date,

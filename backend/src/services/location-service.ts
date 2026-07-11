@@ -1,4 +1,6 @@
+import { z } from "zod";
 import {
+  callRpc,
   countRows,
   deleteRows,
   insertRow,
@@ -170,7 +172,60 @@ async function createVerifiedLocation(): Promise<PlayableLocation> {
   throw new Error("Unable to generate a verified Toronto location.");
 }
 
-export async function selectGameRounds(count = 5): Promise<GameRound[]> {
+/** Row shape returned by the pick_game_rounds Postgres function. */
+const pickedRoundRowSchema = z.object({
+  id: z.string().uuid(),
+  lat: z.number(),
+  lng: z.number(),
+  pano_id: z.string().min(1),
+});
+
+let roundsRpcAvailable = true;
+
+/**
+ * Select rounds for a new game. Prefers the pick_game_rounds SQL function
+ * (exact sampling regardless of table size, one round trip); falls back to
+ * the legacy full-table scan until the migration is applied. An optional
+ * seed makes the SQL selection deterministic.
+ */
+export async function selectGameRounds(
+  count = 5,
+  seed: number | null = null
+): Promise<GameRound[]> {
+  if (roundsRpcAvailable) {
+    try {
+      const payload = await callRpc<unknown>("pick_game_rounds", {
+        round_count: count,
+        seed,
+      });
+      const rows = z.array(pickedRoundRowSchema).parse(payload);
+
+      if (rows.length >= count) {
+        return rows.slice(0, count).map((row) =>
+          toRound({ lat: row.lat, lng: row.lng, panoId: row.pano_id })
+        );
+      }
+      // Pool smaller than requested: the scan path knows how to validate
+      // pano-less rows and to generate new locations when enabled.
+    } catch (error) {
+      roundsRpcAvailable = false;
+      const message =
+        error instanceof Error ? error.message : "Unknown RPC failure.";
+      console.warn(
+        `[location-service] pick_game_rounds RPC unavailable, using full-scan fallback (capped at 1000 rows): ${message}`
+      );
+    }
+  }
+
+  return selectGameRoundsFromScan(count);
+}
+
+/**
+ * Legacy fallback: fetch the whole table and shuffle in JS. Subject to
+ * PostgREST's 1,000-row response cap. Used until the pick_game_rounds
+ * migration is applied, and when the cached pool is smaller than a game.
+ */
+async function selectGameRoundsFromScan(count: number): Promise<GameRound[]> {
   const allCachedLocations = (
     await selectRows<VerifiedLocationRow>(VERIFIED_LOCATIONS_TABLE, {
       columns: VERIFIED_LOCATION_COLUMNS,

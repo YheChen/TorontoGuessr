@@ -112,6 +112,8 @@ Gameplay, scoring, leaderboards, statistics, authentication, the admin review wo
 
    Also run [backend/supabase/add_stats_function_and_indexes.sql](backend/supabase/add_stats_function_and_indexes.sql). It adds the `daily_game_stats` SQL aggregate (exact stats regardless of row volume) and leaderboard indexes. Without it the backend falls back to a slower row scan whose counts cap at 1,000 sessions per range.
 
+   Also run [backend/supabase/add_pick_game_rounds_function.sql](backend/supabase/add_pick_game_rounds_function.sql). It adds the `pick_game_rounds` sampler so game starts select rounds in SQL instead of scanning the whole location table (which caps at 1,000 rows). The backend falls back to the scan until it is applied.
+
 5. Fill in `backend/.env` using [backend/.env.example](backend/.env.example):
 
    ```env
