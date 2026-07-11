@@ -2,6 +2,7 @@ import type React from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "@/components/theme-provider";
 import { MapThemeProvider } from "@/components/site/map-theme";
 import { AppShell } from "@/components/site/app-shell";
@@ -103,6 +104,7 @@ export default function RootLayout({
             <AppShell>{children}</AppShell>
           </MapThemeProvider>
         </ThemeProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
