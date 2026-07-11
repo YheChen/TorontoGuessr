@@ -21,18 +21,30 @@ export default function GamePanorama({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
   });
 
-  const streetViewRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const panoramaRef = useRef<google.maps.StreetViewPanorama | null>(null);
+  const currentPanoRef = useRef<string | null>(null);
+  const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loaded, setLoaded] = useState(false);
 
+  // Hide the overlay when imagery reports in; the fallback guarantees it
+  // never sticks if the event is missed.
+  const armLoadingFallback = () => {
+    if (fallbackRef.current) {
+      clearTimeout(fallbackRef.current);
+    }
+    fallbackRef.current = setTimeout(() => setLoaded(true), 1200);
+  };
+
+  // Create the panorama once per mount; later rounds reuse the instance via
+  // setPano instead of paying construction cost again. The initial pov props
+  // are read from the closure on purpose.
   useEffect(() => {
-    if (!isLoaded || !streetViewRef.current) {
+    if (!isLoaded || !containerRef.current) {
       return;
     }
 
-    setLoaded(false);
-    const node = streetViewRef.current;
-    node.innerHTML = "";
-
+    const node = containerRef.current;
     const panorama = new google.maps.StreetViewPanorama(node, {
       pano: panoId,
       pov: { heading, pitch },
@@ -43,20 +55,41 @@ export default function GamePanorama({
       motionTracking: false,
       motionTrackingControl: false,
     });
-
-    // Hide the overlay as soon as the panorama reports it has imagery, rather
-    // than after an arbitrary delay. A fallback guarantees it never sticks.
+    panoramaRef.current = panorama;
+    currentPanoRef.current = panoId;
     const listener = panorama.addListener("pano_changed", () =>
       setLoaded(true),
     );
-    const fallback = setTimeout(() => setLoaded(true), 1200);
+    armLoadingFallback();
 
     return () => {
       listener.remove();
-      clearTimeout(fallback);
+      if (fallbackRef.current) {
+        clearTimeout(fallbackRef.current);
+      }
+      panoramaRef.current = null;
+      currentPanoRef.current = null;
       node.innerHTML = "";
     };
-  }, [heading, isLoaded, panoId, pitch, zoom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
+
+  // Round changes: retarget the existing instance.
+  useEffect(() => {
+    const panorama = panoramaRef.current;
+    if (!panorama) {
+      return;
+    }
+
+    if (currentPanoRef.current !== panoId) {
+      currentPanoRef.current = panoId;
+      setLoaded(false);
+      armLoadingFallback();
+      panorama.setPano(panoId);
+    }
+    panorama.setPov({ heading, pitch });
+    panorama.setZoom(zoom);
+  }, [panoId, heading, pitch, zoom]);
 
   return (
     <div className="relative h-full min-h-[320px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60">
@@ -68,7 +101,7 @@ export default function GamePanorama({
           </p>
         </div>
       )}
-      <div ref={streetViewRef} className="h-full w-full" />
+      <div ref={containerRef} className="h-full w-full" />
     </div>
   );
 }
