@@ -342,10 +342,69 @@ export async function getRoundForClient(
   return buildRoundPayload(session);
 }
 
+// Opt-in: route guesses through the submit_guess SQL function (one atomic DB
+// round trip instead of read-then-write). Off by default so the migration can
+// be applied and verified before it goes live; falls back to the JS path on
+// any RPC failure.
+const guessRpcEnabled = process.env.GUESS_RPC_ENABLED === "true";
+
+const latLngSchema = z.object({ lat: z.number(), lng: z.number() });
+const submitGuessRpcSchema = z.object({
+  result: z.object({
+    roundNumber: z.number().int(),
+    score: z.number().int(),
+    distance: z.number().nullable(),
+    guessLocation: latLngSchema.nullable(),
+    actualLocation: latLngSchema,
+  }),
+  totalScore: z.number().int(),
+  gameFinished: z.boolean(),
+  isLastRound: z.boolean(),
+  guessRejectedLate: z.boolean(),
+  nextRound: z
+    .object({
+      currentRound: z.number().int(),
+      totalRounds: z.number().int(),
+      round: z.object({
+        panoId: z.string(),
+        heading: z.number(),
+        pitch: z.number(),
+        zoom: z.number(),
+      }),
+      timeLimit: z.number(),
+    })
+    .nullable(),
+});
+
 export async function submitGuess(
   sessionId: string,
   guessLocation: LatLng | null = null
 ) {
+  if (guessRpcEnabled) {
+    try {
+      const payload = await callRpc<unknown>("submit_guess", {
+        p_session_id: sessionId,
+        p_guess_lat: guessLocation?.lat ?? null,
+        p_guess_lng: guessLocation?.lng ?? null,
+      });
+      const parsed = submitGuessRpcSchema.parse(payload);
+      return {
+        ...parsed.result,
+        totalScore: parsed.totalScore,
+        gameFinished: parsed.gameFinished,
+        isLastRound: parsed.isLastRound,
+        guessRejectedLate: parsed.guessRejectedLate,
+        nextRound: parsed.nextRound,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown RPC failure.";
+      console.warn(
+        `[game-store] submit_guess RPC failed, using JS path: ${message}`
+      );
+    }
+  }
+
   const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     throw new Error("Game session is already complete.");

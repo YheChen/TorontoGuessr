@@ -114,6 +114,8 @@ Gameplay, scoring, leaderboards, statistics, authentication, the admin review wo
 
    Also run [backend/supabase/add_pick_game_rounds_function.sql](backend/supabase/add_pick_game_rounds_function.sql). It adds the `pick_game_rounds` sampler so game starts select rounds in SQL instead of scanning the whole location table (which caps at 1,000 rows). The backend falls back to the scan until it is applied.
 
+   Optional: [backend/supabase/add_submit_guess_function.sql](backend/supabase/add_submit_guess_function.sql) adds the `submit_guess` function, which scores a guess in one atomic DB call instead of a read-then-write. It only activates when the backend has `GUESS_RPC_ENABLED=true`; leave that unset until you have applied the migration and verified a real game. With the flag off (default) the backend uses the original two-call path.
+
    Also run [backend/supabase/add_game_modes_and_deadlines.sql](backend/supabase/add_game_modes_and_deadlines.sql). It adds the daily-challenge mode columns and the `round_started_at` timestamp used to enforce round deadlines server-side. Until it is applied, deadlines are skipped and daily-challenge games are recorded as classic.
 
 5. Fill in `backend/.env` using [backend/.env.example](backend/.env.example):
