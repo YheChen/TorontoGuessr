@@ -51,8 +51,27 @@ function generateRandomLocation(): LatLng {
   return { lat, lng };
 }
 
-function shuffle<T>(items: T[]): T[] {
-  return [...items].sort(() => 0.5 - Math.random());
+/** Deterministic PRNG for seeded shuffles (mulberry32). */
+function mulberry32(seedInt: number): () => number {
+  let state = seedInt >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle<T>(items: T[], rng: () => number = Math.random): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    const a = shuffled[i]!;
+    shuffled[i] = shuffled[j]!;
+    shuffled[j] = a;
+  }
+  return shuffled;
 }
 
 function toRound(location: PlayableLocation): GameRound {
@@ -217,18 +236,28 @@ export async function selectGameRounds(
     }
   }
 
-  return selectGameRoundsFromScan(count);
+  return selectGameRoundsFromScan(count, seed);
 }
 
 /**
  * Legacy fallback: fetch the whole table and shuffle in JS. Subject to
  * PostgREST's 1,000-row response cap. Used until the pick_game_rounds
  * migration is applied, and when the cached pool is smaller than a game.
+ * A seed keeps the shuffle deterministic (daily challenge parity).
  */
-async function selectGameRoundsFromScan(count: number): Promise<GameRound[]> {
+async function selectGameRoundsFromScan(
+  count: number,
+  seed: number | null = null
+): Promise<GameRound[]> {
+  const rng =
+    seed === null
+      ? Math.random
+      : mulberry32(Math.floor((seed + 1) * 2147483647));
   const allCachedLocations = (
     await selectRows<VerifiedLocationRow>(VERIFIED_LOCATIONS_TABLE, {
       columns: VERIFIED_LOCATION_COLUMNS,
+      // Stable base order so seeded shuffles are reproducible.
+      order: "created_at.asc",
     })
   ).map(mapVerifiedLocationRow);
   const cachedLocations = [
@@ -236,13 +265,15 @@ async function selectGameRoundsFromScan(count: number): Promise<GameRound[]> {
       allCachedLocations.filter(
         (row) =>
           row.manuallyVerified && row.reviewStatus !== REVIEW_STATUSES.REJECTED
-      )
+      ),
+      rng
     ),
     ...shuffle(
       allCachedLocations.filter(
         (row) =>
           !row.manuallyVerified && row.reviewStatus !== REVIEW_STATUSES.REJECTED
-      )
+      ),
+      rng
     ),
   ];
 

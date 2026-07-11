@@ -9,15 +9,31 @@ const VERIFIED_LOCATIONS_TABLE = "verified_locations";
 const DEFAULT_GENERATE_COUNT = 100;
 const PROGRESS_INTERVAL = 10;
 const MAX_ATTEMPTS_MULTIPLIER = 100;
-const TORONTO_BOUNDS = {
+
+// Default: the downtown core the game has always used. Pass --bounds=city to
+// sample the full City of Toronto (Etobicoke to Scarborough); new locations
+// still land in the admin review queue before they can appear in games.
+const DOWNTOWN_BOUNDS = {
   north: 43.679751,
   south: 43.636327,
   west: -79.413625,
   east: -79.350063,
 };
+const CITY_BOUNDS = {
+  north: 43.8555,
+  south: 43.581,
+  west: -79.6393,
+  east: -79.1152,
+};
+
+const useCityBounds = process.argv.includes("--bounds=city");
+const TORONTO_BOUNDS = useCityBounds ? CITY_BOUNDS : DOWNTOWN_BOUNDS;
 
 function parseRequestedCount(): number {
-  const rawCount = process.argv[2] ?? String(DEFAULT_GENERATE_COUNT);
+  const positional = process.argv
+    .slice(2)
+    .filter((arg) => !arg.startsWith("--"));
+  const rawCount = positional[0] ?? String(DEFAULT_GENERATE_COUNT);
   const count = Number.parseInt(rawCount, 10);
 
   if (!Number.isInteger(count) || count <= 0) {

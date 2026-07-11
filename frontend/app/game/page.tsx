@@ -20,7 +20,9 @@ import {
   startGame as startGameRequest,
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
+import { ShareResults } from "@/components/share-results";
 import type {
+  GameMode,
   GuessLocation,
   GuessResponse,
   NextRoundResponse,
@@ -61,6 +63,8 @@ export default function Game() {
     null,
   );
   const [timeLimit, setTimeLimit] = useState(60);
+  const [mode, setMode] = useState<GameMode>("classic");
+  const [challengeDate, setChallengeDate] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
   const [savedUsername, setSavedUsername] = useState("Guest 0000");
@@ -79,10 +83,19 @@ export default function Game() {
     setSaveErrorMessage(null);
     setIsSavingScore(false);
 
+    // The mode comes from the URL (?mode=daily) so links can target it.
+    const requestedMode: GameMode =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("mode") === "daily"
+        ? "daily"
+        : "classic";
+
     try {
-      const game = await startGameRequest();
+      const game = await startGameRequest(requestedMode);
       setSessionId(game.sessionId);
       setSavedUsername(game.username);
+      setMode(game.mode ?? requestedMode);
+      setChallengeDate(game.challengeDate ?? null);
       setCurrentRound(game.currentRound);
       setTotalRounds(game.totalRounds);
       setCurrentRoundData(game.round);
@@ -169,9 +182,12 @@ export default function Game() {
     }
 
     // Fast path: the guess response already carried the next round, so the
-    // transition needs no API call (and the panorama was prefetched).
+    // transition needs no API call (and the panorama was prefetched). Still
+    // ping /next in the background so the server restarts the round deadline
+    // now that the player is actually seeing the round.
     const prefetched = currentResult.nextRound;
     if (prefetched) {
+      void fetchNextRound(sessionId).catch(() => undefined);
       setCurrentRound(prefetched.currentRound);
       setTotalRounds(prefetched.totalRounds);
       setCurrentRoundData(prefetched.round);
@@ -238,6 +254,13 @@ export default function Game() {
                 currentRound={currentRound}
                 totalRounds={totalRounds}
                 scores={scores}
+                badgeSlot={
+                  mode === "daily" ? (
+                    <span className="pointer-events-auto inline-flex items-center rounded-full bg-toronto-red px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-white shadow-elevated">
+                      Daily
+                    </span>
+                  ) : undefined
+                }
                 timerSlot={
                   <RoundCountdown
                     timeLimit={timeLimit}
@@ -300,6 +323,7 @@ export default function Game() {
                 isLastRound={currentResult.isLastRound}
                 roundNumber={currentResult.roundNumber}
                 totalRounds={totalRounds}
+                rejectedLate={currentResult.guessRejectedLate ?? false}
               />
             </div>
           )}
@@ -314,7 +338,9 @@ export default function Game() {
                 />
                 <span className="inline-flex items-center gap-2 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                   <Flag className="size-3.5" />
-                  Game complete
+                  {mode === "daily" && challengeDate
+                    ? `Daily challenge · ${challengeDate}`
+                    : "Game complete"}
                 </span>
                 <p className="mt-6 text-sm text-muted-foreground">
                   Final score
@@ -439,6 +465,13 @@ export default function Game() {
                   <RotateCcw className="size-5" />
                   Play again
                 </Button>
+                <ShareResults
+                  totalScore={totalScore}
+                  maxScore={maxTotal}
+                  scores={scores}
+                  mode={mode}
+                  challengeDate={challengeDate}
+                />
                 <Button
                   asChild
                   size="xl"

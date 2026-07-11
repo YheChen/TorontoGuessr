@@ -10,6 +10,8 @@ interface GameHUDProps {
   scores: Array<{ score: number }>;
   /** Rendered under the score chip; used for the round countdown. */
   timerSlot?: ReactNode;
+  /** Rendered next to the round chip; used for mode badges. */
+  badgeSlot?: ReactNode;
 }
 
 const chip =
@@ -27,6 +29,7 @@ export function GameHUD({
   totalRounds,
   scores,
   timerSlot,
+  badgeSlot,
 }: GameHUDProps) {
   const totalScore = scores.reduce((sum, round) => sum + round.score, 0);
 
@@ -34,13 +37,16 @@ export function GameHUD({
     <div className="flex items-start justify-between gap-2">
       {/* Round + progress */}
       <div className="flex flex-col items-start gap-2">
-        <span className={chip}>
-          <span className="text-muted-foreground">Round</span>
-          <span className="tabular">
-            {currentRound}
-            <span className="text-muted-foreground"> / {totalRounds}</span>
+        <div className="flex items-center gap-2">
+          <span className={chip}>
+            <span className="text-muted-foreground">Round</span>
+            <span className="tabular">
+              {currentRound}
+              <span className="text-muted-foreground"> / {totalRounds}</span>
+            </span>
           </span>
-        </span>
+          {badgeSlot}
+        </div>
         <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-background/75 px-3 py-2 shadow-elevated ring-1 ring-border/70 backdrop-blur-md">
           {Array.from({ length: totalRounds }).map((_, index) => {
             const played = scores[index];

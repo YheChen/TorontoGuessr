@@ -15,6 +15,7 @@ import {
   resolveDefaultUsername,
 } from "./username-utils.js";
 import type {
+  GameMode,
   GameRound,
   GameSession,
   GameSessionRecord,
@@ -26,10 +27,63 @@ import type {
 export { LEADERBOARD_PERIODS } from "./types.js";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
-const GAME_SESSION_COLUMNS =
+const GAME_SESSION_COLUMNS_LEGACY =
   "id,username,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
+const GAME_SESSION_COLUMNS_EXTENDED = `${GAME_SESSION_COLUMNS_LEGACY},mode,challenge_date,round_started_at`;
 const DEFAULT_STATS_DAYS = 30;
 const DEFAULT_STATS_TIME_ZONE = "America/Toronto";
+export const ROUND_TIME_LIMIT_SECONDS = 60;
+// Allowance on top of the round timer for network latency and clock skew
+// before a guess is treated as a timeout.
+const ROUND_DEADLINE_GRACE_SECONDS = 15;
+
+// Flips to false when the mode/deadline columns are missing (migration not
+// applied yet); all session operations then degrade to the legacy schema.
+let sessionSchemaExtended = true;
+let hasWarnedAboutLegacySchema = false;
+
+function sessionColumns(): string {
+  return sessionSchemaExtended
+    ? GAME_SESSION_COLUMNS_EXTENDED
+    : GAME_SESSION_COLUMNS_LEGACY;
+}
+
+function isMissingColumnError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /column .* does not exist|could not find the '.*' column/i.test(
+      error.message
+    )
+  );
+}
+
+/** Run a session operation, retrying with the legacy schema when the new
+ *  columns are missing. */
+async function withSessionSchemaFallback<T>(
+  operation: () => Promise<T>,
+  legacyOperation: () => Promise<T>
+): Promise<T> {
+  if (!sessionSchemaExtended) {
+    return legacyOperation();
+  }
+
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    sessionSchemaExtended = false;
+    if (!hasWarnedAboutLegacySchema) {
+      hasWarnedAboutLegacySchema = true;
+      console.warn(
+        "[game-store] mode/round_started_at columns missing; run add_game_modes_and_deadlines.sql. Deadlines and daily challenges are disabled until then."
+      );
+    }
+    return legacyOperation();
+  }
+}
 
 interface RoundPayload {
   currentRound: number;
@@ -74,7 +128,7 @@ function buildRoundPayload(session: GameSession): RoundPayload {
       pitch: round.pitch,
       zoom: round.zoom,
     },
-    timeLimit: 60,
+    timeLimit: ROUND_TIME_LIMIT_SECONDS,
   };
 }
 
@@ -91,11 +145,17 @@ function mapSessionRecord(record: GameSessionRecord): GameSession {
     status: record.status,
     createdAt: record.created_at,
     completedAt: record.completed_at ?? null,
+    mode: record.mode ?? "classic",
+    challengeDate: record.challenge_date ?? null,
+    roundStartedAt: record.round_started_at ?? null,
   };
 }
 
-function buildSessionInsert(session: GameSession): Record<string, unknown> {
-  return {
+function buildSessionInsert(
+  session: GameSession,
+  { extended }: { extended: boolean }
+): Record<string, unknown> {
+  const base: Record<string, unknown> = {
     id: session.id,
     username: session.username,
     rounds: session.rounds,
@@ -108,6 +168,14 @@ function buildSessionInsert(session: GameSession): Record<string, unknown> {
     created_at: session.createdAt,
     completed_at: session.completedAt,
   };
+
+  if (extended) {
+    base.mode = session.mode;
+    base.challenge_date = session.challengeDate;
+    base.round_started_at = session.roundStartedAt;
+  }
+
+  return base;
 }
 
 function isValidTimeZone(timeZone: string): boolean {
@@ -179,12 +247,16 @@ function createDailySeries(days: number, timeZone: string): DailyStatsEntry[] {
 }
 
 async function requireGameSession(sessionId: string): Promise<GameSession> {
-  const record = await selectSingleRow<GameSessionRecord>(
-    GAME_SESSIONS_TABLE,
-    {
-      columns: GAME_SESSION_COLUMNS,
+  const fetchWithColumns = async (columns: string) => {
+    return selectSingleRow<GameSessionRecord>(GAME_SESSIONS_TABLE, {
+      columns,
       filters: { id: sessionId },
-    }
+    });
+  };
+
+  const record = await withSessionSchemaFallback(
+    () => fetchWithColumns(GAME_SESSION_COLUMNS_EXTENDED),
+    () => fetchWithColumns(GAME_SESSION_COLUMNS_LEGACY)
   );
 
   if (!record) {
@@ -194,8 +266,14 @@ async function requireGameSession(sessionId: string): Promise<GameSession> {
   return mapSessionRecord(record);
 }
 
+interface CreateGameSessionOptions {
+  mode?: GameMode;
+  challengeDate?: string | null;
+}
+
 export async function createGameSession(
-  rounds: GameRound[]
+  rounds: GameRound[],
+  { mode = "classic", challengeDate = null }: CreateGameSessionOptions = {}
 ): Promise<GameSession> {
   const session: GameSession = {
     id: randomUUID(),
@@ -209,25 +287,56 @@ export async function createGameSession(
     status: "in_progress",
     createdAt: new Date().toISOString(),
     completedAt: null,
+    mode,
+    challengeDate: mode === "daily" ? challengeDate : null,
+    roundStartedAt: new Date().toISOString(),
   };
 
-  const record = await insertRow<GameSessionRecord>(
-    GAME_SESSIONS_TABLE,
-    buildSessionInsert(session),
-    {
-      columns: GAME_SESSION_COLUMNS,
-    }
+  const record = await withSessionSchemaFallback(
+    () =>
+      insertRow<GameSessionRecord>(
+        GAME_SESSIONS_TABLE,
+        buildSessionInsert(session, { extended: true }),
+        { columns: GAME_SESSION_COLUMNS_EXTENDED }
+      ),
+    () =>
+      insertRow<GameSessionRecord>(
+        GAME_SESSIONS_TABLE,
+        buildSessionInsert(session, { extended: false }),
+        { columns: GAME_SESSION_COLUMNS_LEGACY }
+      )
   );
 
   return mapSessionRecord(record);
 }
 
 export async function getRoundForClient(
-  sessionId: string
+  sessionId: string,
+  { touchDeadline = false }: { touchDeadline?: boolean } = {}
 ): Promise<RoundPayload | null> {
   const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     return null;
+  }
+
+  // The player is being served this round now; restart its deadline clock.
+  if (touchDeadline && sessionSchemaExtended) {
+    try {
+      await updateSingleRow<GameSessionRecord>(
+        GAME_SESSIONS_TABLE,
+        { round_started_at: new Date().toISOString() },
+        {
+          filters: { id: sessionId, status: "in_progress" },
+          columns: "id",
+        }
+      );
+    } catch (error) {
+      if (isMissingColumnError(error)) {
+        sessionSchemaExtended = false;
+      } else {
+        throw error;
+      }
+    }
   }
 
   return buildRoundPayload(session);
@@ -248,12 +357,24 @@ export async function submitGuess(
     throw new Error("No active round found for this session.");
   }
 
+  // Enforce the round timer server-side: a guess arriving well past the
+  // deadline is treated as a timeout instead of trusting the client clock.
+  // Legacy sessions without a recorded start time are exempt.
+  const startedAtMs = session.roundStartedAt
+    ? Date.parse(session.roundStartedAt)
+    : Number.NaN;
+  const deadlineMs =
+    (ROUND_TIME_LIMIT_SECONDS + ROUND_DEADLINE_GRACE_SECONDS) * 1000;
+  const isLate =
+    Number.isFinite(startedAtMs) && Date.now() - startedAtMs > deadlineMs;
+  const effectiveGuess = isLate ? null : guessLocation;
+
   const distance =
-    guessLocation === null
+    effectiveGuess === null
       ? null
       : calculateDistance(
-          guessLocation.lat,
-          guessLocation.lng,
+          effectiveGuess.lat,
+          effectiveGuess.lng,
           round.lat,
           round.lng
         );
@@ -264,7 +385,7 @@ export async function submitGuess(
     roundNumber: roundIndex + 1,
     score,
     distance,
-    guessLocation,
+    guessLocation: effectiveGuess,
     actualLocation: {
       lat: round.lat,
       lng: round.lng,
@@ -282,24 +403,34 @@ export async function submitGuess(
     session.completedAt = new Date().toISOString();
   }
 
-  const updatedRecord = await updateSingleRow<GameSessionRecord>(
-    GAME_SESSIONS_TABLE,
-    {
-      current_round_index: session.currentRoundIndex,
-      total_score: session.totalScore,
-      results: session.results,
-      rounds_played: session.roundsPlayed,
-      status: session.status,
-      completed_at: session.completedAt,
-    },
-    {
-      filters: {
-        id: sessionId,
-        current_round_index: session.currentRoundIndex - 1,
-        status: "in_progress",
-      },
-      columns: GAME_SESSION_COLUMNS,
-    }
+  const baseUpdate: Record<string, unknown> = {
+    current_round_index: session.currentRoundIndex,
+    total_score: session.totalScore,
+    results: session.results,
+    rounds_played: session.roundsPlayed,
+    status: session.status,
+    completed_at: session.completedAt,
+  };
+  const updateFilters = {
+    id: sessionId,
+    current_round_index: session.currentRoundIndex - 1,
+    status: "in_progress",
+  };
+
+  const updatedRecord = await withSessionSchemaFallback(
+    () =>
+      updateSingleRow<GameSessionRecord>(
+        GAME_SESSIONS_TABLE,
+        // Baseline the next round's deadline at guess time; the /next ping
+        // (or legacy /next fetch) restarts it when the round is served.
+        { ...baseUpdate, round_started_at: new Date().toISOString() },
+        { filters: updateFilters, columns: GAME_SESSION_COLUMNS_EXTENDED }
+      ),
+    () =>
+      updateSingleRow<GameSessionRecord>(GAME_SESSIONS_TABLE, baseUpdate, {
+        filters: updateFilters,
+        columns: GAME_SESSION_COLUMNS_LEGACY,
+      })
   );
 
   if (!updatedRecord) {
@@ -313,6 +444,8 @@ export async function submitGuess(
     totalScore: updatedRecord.total_score,
     gameFinished,
     isLastRound: gameFinished,
+    // True when a placed guess was discarded for missing the round deadline.
+    guessRejectedLate: isLate && guessLocation !== null,
     // Ship the next round with the result so the client can transition (and
     // start warming the next panorama) without another API round trip.
     nextRound: gameFinished ? null : buildRoundPayload(session),
@@ -342,7 +475,7 @@ export async function saveUsername(sessionId: string, username: string) {
     },
     {
       filters: { id: sessionId, status: "finished" },
-      columns: GAME_SESSION_COLUMNS,
+      columns: sessionColumns(),
     }
   );
 
@@ -356,10 +489,30 @@ export async function saveUsername(sessionId: string, username: string) {
   };
 }
 
+/** Calendar date key for "today" in the game's home time zone. */
+export function getTorontoDateKey(): string {
+  return getDateKey(new Date(), DEFAULT_STATS_TIME_ZONE);
+}
+
+/**
+ * Deterministic seed in [-1, 1] derived from a string (FNV-1a hash). Used to
+ * make daily-challenge round selection identical for every player on a date.
+ */
+export function seedFromString(value: string): number {
+  let hash = 2166136261 >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619) >>> 0;
+  }
+  return (hash / 4294967295) * 2 - 1;
+}
+
+export type LeaderboardBoard = "global" | "challenge";
+
 interface LeaderboardQuery {
   limit?: number;
   page?: number;
   period?: LeaderboardPeriod;
+  board?: LeaderboardBoard;
 }
 
 type LeaderboardRecord = Pick<
@@ -371,25 +524,47 @@ export async function getLeaderboard({
   limit = 10,
   page = 1,
   period = "lifetime",
+  board = "global",
 }: LeaderboardQuery = {}) {
-  const since = getLeaderboardSince(period);
   const filters: Filters = { status: "finished" };
   const offset = (page - 1) * limit;
 
-  if (since) {
-    filters.completed_at = { op: "gte", value: since };
+  if (board === "challenge") {
+    // Today's daily challenge only; period does not apply.
+    filters.mode = "daily";
+    filters.challenge_date = getTorontoDateKey();
+  } else {
+    const since = getLeaderboardSince(period);
+    if (since) {
+      filters.completed_at = { op: "gte", value: since };
+    }
   }
 
-  const [records, total] = await Promise.all([
-    selectRows<LeaderboardRecord>(GAME_SESSIONS_TABLE, {
-      columns: "id,username,total_score,rounds_played,completed_at",
-      filters,
-      order: "total_score.desc,completed_at.asc",
-      limit,
-      offset,
-    }),
-    countRows(GAME_SESSIONS_TABLE, { filters }),
-  ]);
+  let records: LeaderboardRecord[] = [];
+  let total = 0;
+  try {
+    [records, total] = await Promise.all([
+      selectRows<LeaderboardRecord>(GAME_SESSIONS_TABLE, {
+        columns: "id,username,total_score,rounds_played,completed_at",
+        filters,
+        order: "total_score.desc,completed_at.asc",
+        limit,
+        offset,
+      }),
+      countRows(GAME_SESSIONS_TABLE, { filters }),
+    ]);
+  } catch (error) {
+    // Challenge board before the mode columns exist: present an empty board
+    // rather than failing the page. (PostgREST reports the missing `mode`
+    // column obliquely, parsing it as its ordered-set aggregate function.)
+    if (board !== "challenge") {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[game-store] challenge leaderboard unavailable, returning empty board: ${message}`
+    );
+  }
 
   const entries = records.map((record) => ({
     id: record.id,
