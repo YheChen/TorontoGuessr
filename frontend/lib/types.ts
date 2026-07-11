@@ -28,6 +28,8 @@ export interface GuessResponse {
   totalScore: number;
   gameFinished: boolean;
   isLastRound: boolean;
+  /** Prefetched next round, present on newer backends when the game continues. */
+  nextRound?: NextRoundResponse | null;
 }
 
 export interface NextRoundResponse {

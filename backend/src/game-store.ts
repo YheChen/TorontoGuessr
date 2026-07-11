@@ -313,6 +313,9 @@ export async function submitGuess(
     totalScore: updatedRecord.total_score,
     gameFinished,
     isLastRound: gameFinished,
+    // Ship the next round with the result so the client can transition (and
+    // start warming the next panorama) without another API round trip.
+    nextRound: gameFinished ? null : buildRoundPayload(session),
   };
 }
 

@@ -6,6 +6,8 @@ import { Trophy, RotateCcw, Save, Check, Flag } from "lucide-react";
 import { GameHUD } from "@/components/game-hud";
 import { GuessPanel } from "@/components/guess-panel";
 import GamePanorama from "@/components/gamepanorama";
+import { PanoPrefetch } from "@/components/pano-prefetch";
+import { RoundCountdown } from "@/components/round-countdown";
 import { GameResults } from "@/components/game-results";
 import { LoadingScreen, ErrorCard } from "@/components/site/states";
 import { CountUp } from "@/components/site/count-up";
@@ -58,7 +60,6 @@ export default function Game() {
   const [currentResult, setCurrentResult] = useState<GuessResponse | null>(
     null,
   );
-  const [timeRemaining, setTimeRemaining] = useState(60);
   const [timeLimit, setTimeLimit] = useState(60);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
@@ -88,7 +89,6 @@ export default function Game() {
       setGuessLocation(null);
       setScores([]);
       setCurrentResult(null);
-      setTimeRemaining(game.timeLimit);
       setTimeLimit(game.timeLimit);
       setGameState("guessing");
     } catch (error) {
@@ -102,23 +102,6 @@ export default function Game() {
   useEffect(() => {
     void startGame();
   }, []);
-
-  useEffect(() => {
-    if (gameState !== "guessing") {
-      return;
-    }
-
-    if (timeRemaining <= 0) {
-      void handleSubmitGuess();
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setTimeRemaining((current) => current - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [gameState, timeRemaining]);
 
   const handleMapClick = (lat: number, lng: number) => {
     if (gameState === "guessing") {
@@ -185,6 +168,20 @@ export default function Game() {
       return;
     }
 
+    // Fast path: the guess response already carried the next round, so the
+    // transition needs no API call (and the panorama was prefetched).
+    const prefetched = currentResult.nextRound;
+    if (prefetched) {
+      setCurrentRound(prefetched.currentRound);
+      setTotalRounds(prefetched.totalRounds);
+      setCurrentRoundData(prefetched.round);
+      setGuessLocation(null);
+      setCurrentResult(null);
+      setTimeLimit(prefetched.timeLimit);
+      setGameState("guessing");
+      return;
+    }
+
     setGameState("loading");
     setErrorMessage(null);
 
@@ -203,7 +200,6 @@ export default function Game() {
       setCurrentRoundData(nextRound.round);
       setGuessLocation(null);
       setCurrentResult(null);
-      setTimeRemaining(nextRound.timeLimit);
       setTimeLimit(nextRound.timeLimit);
       setGameState("guessing");
     } catch (error) {
@@ -242,9 +238,14 @@ export default function Game() {
                 currentRound={currentRound}
                 totalRounds={totalRounds}
                 scores={scores}
-                timeRemaining={timeRemaining}
-                timeLimit={timeLimit}
-                showTimer
+                timerSlot={
+                  <RoundCountdown
+                    timeLimit={timeLimit}
+                    roundKey={currentRound}
+                    paused={gameState !== "guessing"}
+                    onExpire={() => void handleSubmitGuess()}
+                  />
+                }
               />
             </div>
 
@@ -282,6 +283,10 @@ export default function Game() {
                 retryLabel="Try again"
               />
             </div>
+          )}
+
+          {gameState === "results" && currentResult?.nextRound && (
+            <PanoPrefetch panoId={currentResult.nextRound.round.panoId} />
           )}
 
           {gameState === "results" && currentResult && (
