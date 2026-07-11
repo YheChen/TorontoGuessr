@@ -7,7 +7,9 @@ import {
   getDailyGameStats,
   getLeaderboard,
   getRoundForClient,
+  getTorontoDateKey,
   saveUsername,
+  seedFromString,
   submitGuess,
 } from "./game-store.js";
 import {
@@ -41,9 +43,13 @@ const guessSchema = z.object({
 const usernameSchema = z.object({
   username: z.string().optional(),
 });
+const startGameSchema = z.object({
+  mode: z.enum(["classic", "daily"]).default("classic"),
+});
 const leaderboardPeriodSchema = z.enum(LEADERBOARD_PERIODS);
 const leaderboardQuerySchema = z.object({
   period: leaderboardPeriodSchema.default("lifetime"),
+  board: z.enum(["global", "challenge"]).default("global"),
   page: z.coerce.number().int().min(1).max(1000).default(1),
   limit: z.coerce.number().int().min(1).max(25).default(10),
 });
@@ -134,8 +140,12 @@ export async function routeRequest(
     }
 
     if (request.method === "POST" && pathname === "/games/start") {
-      const rounds = await selectGameRounds(5);
-      const session = await createGameSession(rounds);
+      const { mode } = startGameSchema.parse(await readBody(request));
+      const challengeDate = mode === "daily" ? getTorontoDateKey() : null;
+      // Daily challenge: everyone gets the same rounds for a given date.
+      const seed = challengeDate ? seedFromString(challengeDate) : null;
+      const rounds = await selectGameRounds(5, seed);
+      const session = await createGameSession(rounds, { mode, challengeDate });
       const payload = await getRoundForClient(session.id);
       if (!payload) {
         throw new Error("New game session is missing its first round.");
@@ -144,6 +154,8 @@ export async function routeRequest(
       sendJson(response, 200, {
         sessionId: session.id,
         username: session.username,
+        mode: session.mode,
+        challengeDate: session.challengeDate,
         ...payload,
       });
       return;
@@ -162,7 +174,9 @@ export async function routeRequest(
 
     const nextParams = matchRoute(pathname, "/games/:sessionId/next");
     if (request.method === "POST" && nextParams?.sessionId) {
-      const nextRound = await getRoundForClient(nextParams.sessionId);
+      const nextRound = await getRoundForClient(nextParams.sessionId, {
+        touchDeadline: true,
+      });
       if (nextRound === null) {
         sendJson(response, 200, {
           gameFinished: true,
@@ -188,6 +202,7 @@ export async function routeRequest(
     if (request.method === "GET" && pathname === "/leaderboard") {
       const query = leaderboardQuerySchema.parse({
         period: url.searchParams.get("period") ?? undefined,
+        board: url.searchParams.get("board") ?? undefined,
         page: url.searchParams.get("page") ?? undefined,
         limit: url.searchParams.get("limit") ?? undefined,
       });

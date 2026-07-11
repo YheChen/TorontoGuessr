@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ShieldCheck,
   Inbox,
@@ -196,6 +196,69 @@ export default function ReviewLocationsPage() {
       setIsMutating(false);
     }
   };
+
+  // Keyboard shortcuts for the review grind: A accept, R reject,
+  // arrow keys navigate, U undo. Ignored while typing or while busy.
+  const shortcutState = useRef({
+    handleDecision,
+    handleMove,
+    handleUndo,
+    ready: false,
+  });
+  shortcutState.current = {
+    handleDecision,
+    handleMove,
+    handleUndo,
+    ready: Boolean(adminToken && currentEntry && !isMutating && !isLoading),
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const state = shortcutState.current;
+      if (!state.ready) {
+        return;
+      }
+
+      switch (event.key.toLowerCase()) {
+        case "a":
+          event.preventDefault();
+          void state.handleDecision("accept");
+          break;
+        case "r":
+          event.preventDefault();
+          void state.handleDecision("reject");
+          break;
+        case "u":
+          event.preventDefault();
+          void state.handleUndo();
+          break;
+        case "arrowleft":
+          event.preventDefault();
+          void state.handleMove(-1);
+          break;
+        case "arrowright":
+          event.preventDefault();
+          void state.handleMove(1);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const tiles = [
     {
@@ -432,6 +495,13 @@ export default function ReviewLocationsPage() {
                     Undo last action
                   </Button>
                 </div>
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Shortcuts: <kbd className="font-mono-accent">A</kbd> accept ·{" "}
+                  <kbd className="font-mono-accent">R</kbd> reject ·{" "}
+                  <kbd className="font-mono-accent">←</kbd>
+                  <kbd className="font-mono-accent">→</kbd> navigate ·{" "}
+                  <kbd className="font-mono-accent">U</kbd> undo
+                </p>
               </div>
             </div>
 

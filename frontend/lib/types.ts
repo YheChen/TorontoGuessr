@@ -10,6 +10,8 @@ export interface RoundPayload {
   zoom: number;
 }
 
+export type GameMode = "classic" | "daily";
+
 export interface StartGameResponse {
   sessionId: string;
   username: string;
@@ -17,6 +19,9 @@ export interface StartGameResponse {
   totalRounds: number;
   round: RoundPayload;
   timeLimit: number;
+  /** Present on newer backends. */
+  mode?: GameMode;
+  challengeDate?: string | null;
 }
 
 export interface GuessResponse {
@@ -30,6 +35,8 @@ export interface GuessResponse {
   isLastRound: boolean;
   /** Prefetched next round, present on newer backends when the game continues. */
   nextRound?: NextRoundResponse | null;
+  /** True when a placed guess was discarded for missing the round deadline. */
+  guessRejectedLate?: boolean;
 }
 
 export interface NextRoundResponse {

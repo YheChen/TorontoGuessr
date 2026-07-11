@@ -9,6 +9,7 @@ import {
   Target,
   Map as MapIcon,
   Building2,
+  CalendarDays,
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,16 @@ export default function Home() {
                 <Link href="/game">
                   <Play className="size-5" />
                   Play now
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="xl"
+                className="rounded-2xl bg-toronto-red text-white hover:bg-toronto-red/90"
+              >
+                <Link href="/game?mode=daily">
+                  <CalendarDays className="size-5" />
+                  Daily challenge
                 </Link>
               </Button>
               <Button

@@ -114,6 +114,8 @@ Gameplay, scoring, leaderboards, statistics, authentication, the admin review wo
 
    Also run [backend/supabase/add_pick_game_rounds_function.sql](backend/supabase/add_pick_game_rounds_function.sql). It adds the `pick_game_rounds` sampler so game starts select rounds in SQL instead of scanning the whole location table (which caps at 1,000 rows). The backend falls back to the scan until it is applied.
 
+   Also run [backend/supabase/add_game_modes_and_deadlines.sql](backend/supabase/add_game_modes_and_deadlines.sql). It adds the daily-challenge mode columns and the `round_started_at` timestamp used to enforce round deadlines server-side. Until it is applied, deadlines are skipped and daily-challenge games are recorded as classic.
+
 5. Fill in `backend/.env` using [backend/.env.example](backend/.env.example):
 
    ```env

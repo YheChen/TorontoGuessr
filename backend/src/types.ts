@@ -25,6 +25,8 @@ export interface RoundResult {
 
 export type GameStatus = "in_progress" | "finished";
 
+export type GameMode = "classic" | "daily";
+
 /** Camel-cased session model used inside the backend. */
 export interface GameSession {
   id: string;
@@ -38,6 +40,9 @@ export interface GameSession {
   status: GameStatus;
   createdAt: string;
   completedAt: string | null;
+  mode: GameMode;
+  challengeDate: string | null;
+  roundStartedAt: string | null;
 }
 
 /** Raw `game_sessions` row shape as returned by PostgREST. */
@@ -53,6 +58,9 @@ export interface GameSessionRecord {
   status: GameStatus;
   created_at: string;
   completed_at: string | null;
+  mode?: GameMode | null;
+  challenge_date?: string | null;
+  round_started_at?: string | null;
 }
 
 export const REVIEW_STATUSES = {

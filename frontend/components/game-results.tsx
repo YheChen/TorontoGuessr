@@ -25,6 +25,8 @@ interface GameResultsProps {
   isLastRound: boolean;
   roundNumber?: number;
   totalRounds?: number;
+  /** The guess arrived after the server-side deadline and was discarded. */
+  rejectedLate?: boolean;
 }
 
 const MAX_SCORE = 5000;
@@ -82,6 +84,7 @@ export function GameResults({
   isLastRound,
   roundNumber,
   totalRounds,
+  rejectedLate = false,
 }: GameResultsProps) {
   const hasGuess = guessLocation !== null;
   const verdict = getVerdict(score, hasGuess);
@@ -147,6 +150,13 @@ export function GameResults({
             </p>
           </div>
         </div>
+
+        {rejectedLate && (
+          <p className="mt-4 rounded-xl border border-toronto-red/30 bg-toronto-red/10 px-4 py-3 text-sm font-medium text-toronto-red">
+            Your pin arrived after the round timer expired, so this round was
+            scored as a timeout.
+          </p>
+        )}
 
         <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <span className="inline-flex items-center gap-1.5">

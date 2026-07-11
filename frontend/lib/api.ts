@@ -1,5 +1,6 @@
 import type {
   DeleteRejectedLocationsResponse,
+  GameMode,
   GameStatsResponse,
   GuessLocation,
   GuessResponse,
@@ -48,9 +49,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export function startGame() {
+export function startGame(mode: GameMode = "classic") {
   return request<StartGameResponse>("/games/start", {
     method: "POST",
+    body: JSON.stringify({ mode }),
   });
 }
 
@@ -76,10 +78,14 @@ export function saveScoreUsername(sessionId: string, username: string) {
 
 export async function fetchLeaderboard(
   period: LeaderboardPeriod = "lifetime",
-  { page = 1, limit = 10 } = {}
+  {
+    page = 1,
+    limit = 10,
+    board = "global",
+  }: { page?: number; limit?: number; board?: "global" | "challenge" } = {}
 ) {
   const response = await request<LeaderboardResponse>(
-    `/leaderboard?period=${encodeURIComponent(period)}&page=${page}&limit=${limit}`
+    `/leaderboard?period=${encodeURIComponent(period)}&board=${board}&page=${page}&limit=${limit}`
   );
   return response;
 }

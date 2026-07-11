@@ -95,6 +95,7 @@ export default function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(
     null,
   );
+  const [board, setBoard] = useState<"global" | "challenge">("global");
   const [period, setPeriod] = useState<LeaderboardPeriod>("lifetime");
   const [page, setPage] = useState(1);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -113,6 +114,7 @@ export default function Leaderboard() {
         const nextLeaderboard = await fetchLeaderboard(period, {
           page,
           limit: currentLimit,
+          board,
         });
         if (!isCancelled) {
           setLeaderboard(nextLeaderboard);
@@ -137,10 +139,17 @@ export default function Leaderboard() {
     return () => {
       isCancelled = true;
     };
-  }, [currentLimit, page, period]);
+  }, [board, currentLimit, page, period]);
 
   const handlePeriodChange = (nextPeriod: LeaderboardPeriod) => {
     setPeriod(nextPeriod);
+    setPage(1);
+    setIsExpanded(false);
+    setLeaderboard(null);
+  };
+
+  const handleBoardChange = (nextBoard: "global" | "challenge") => {
+    setBoard(nextBoard);
     setPage(1);
     setIsExpanded(false);
     setLeaderboard(null);
@@ -159,8 +168,10 @@ export default function Leaderboard() {
   const showingTo = totalEntries === 0 ? 0 : rankOffset + entries.length;
   const paginationItems = getPaginationItems(currentPage, totalPages);
   // By design, the all-time board expands to a top-25 view (no pagination),
-  // while the time-bounded boards keep paging after the preview.
-  const shouldPaginateExpanded = isExpanded && period !== "lifetime";
+  // while the time-bounded boards keep paging after the preview. The daily
+  // challenge board is a single-day top list, so it never paginates either.
+  const shouldPaginateExpanded =
+    isExpanded && board === "global" && period !== "lifetime";
   const showMoreAvailable =
     !isLoading && !errorMessage && !isExpanded && totalEntries > PREVIEW_LIMIT;
 
@@ -193,7 +204,9 @@ export default function Leaderboard() {
             Hall of the 6ix
           </h1>
           <p className="mt-3 max-w-xl text-pretty text-muted-foreground">
-            {activeOption.description}
+            {board === "challenge"
+              ? "Today's daily challenge: everyone plays the same five locations."
+              : activeOption.description}
           </p>
         </div>
         <Button asChild size="lg" className="rounded-xl shadow-glow">
@@ -204,17 +217,22 @@ export default function Leaderboard() {
         </Button>
       </div>
 
-      {/* Period segmented control + summary */}
+      {/* Board + period controls + summary */}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
-            {LEADERBOARD_OPTIONS.map((option) => {
-              const isActive = option.value === period;
+            {(
+              [
+                { value: "global", label: "Global" },
+                { value: "challenge", label: "Daily challenge" },
+              ] as const
+            ).map((option) => {
+              const isActive = option.value === board;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => handlePeriodChange(option.value)}
+                  onClick={() => handleBoardChange(option.value)}
                   className={cn(
                     "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-all sm:px-4",
                     isActive
@@ -228,6 +246,32 @@ export default function Leaderboard() {
               );
             })}
           </div>
+
+          {board === "global" && (
+            <div className="-mx-1 overflow-x-auto px-1 pb-1">
+              <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
+                {LEADERBOARD_OPTIONS.map((option) => {
+                  const isActive = option.value === period;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handlePeriodChange(option.value)}
+                      className={cn(
+                        "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-all sm:px-4",
+                        isActive
+                          ? "bg-card text-foreground shadow-soft"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      aria-pressed={isActive}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
         <p className="text-sm text-muted-foreground tabular">{summaryText}</p>
       </div>
@@ -252,10 +296,16 @@ export default function Leaderboard() {
           <EmptyState
             icon={Trophy}
             title="No scores yet"
-            description={`Be the first to set a ${activeOption.label.toLowerCase()} score. Finish a game and save your name.`}
+            description={
+              board === "challenge"
+                ? "No one has finished today's challenge yet. Be the first!"
+                : `Be the first to set a ${activeOption.label.toLowerCase()} score. Finish a game and save your name.`
+            }
             action={
               <Button asChild className="mt-1 rounded-xl">
-                <Link href="/game">
+                <Link
+                  href={board === "challenge" ? "/game?mode=daily" : "/game"}
+                >
                   <Play className="size-4" />
                   Play now
                 </Link>
