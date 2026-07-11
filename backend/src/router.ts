@@ -209,7 +209,14 @@ export async function routeRequest(
         timeZone: url.searchParams.get("timeZone") ?? undefined,
       });
 
-      sendJson(response, 200, await getDailyGameStats(query));
+      const stats = await getDailyGameStats(query);
+      // Aggregate stats tolerate a minute of staleness; let the CDN absorb
+      // repeat reads. Set only on success so errors are never cached.
+      response.setHeader(
+        "Cache-Control",
+        "public, s-maxage=60, stale-while-revalidate=300"
+      );
+      sendJson(response, 200, stats);
       return;
     }
 
