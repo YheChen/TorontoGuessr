@@ -35,6 +35,7 @@ import {
   enterRequestTimings,
   logRequestTiming,
 } from "./observability.js";
+import { checkRateLimit, clientIp } from "./rate-limit.js";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -160,6 +161,22 @@ export async function routeRequest(
     }
 
     if (request.method === "POST" && pathname === "/games/start") {
+      // Starting a game is the most expensive route (Street View + inserts),
+      // so cap it per IP to deter session spam.
+      const rateLimit = checkRateLimit(`games-start:${clientIp(request)}`, {
+        limit: 20,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(
+          response,
+          429,
+          "Too many new games from this address. Please wait a moment and try again."
+        );
+        return;
+      }
+
       const { mode } = startGameSchema.parse(await readBody(request));
       const challengeDate = mode === "daily" ? getTorontoDateKey() : null;
       // Daily challenge: everyone gets the same rounds for a given date.
