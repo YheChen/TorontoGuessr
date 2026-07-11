@@ -1,4 +1,5 @@
 import { loadEnv } from "./env.js";
+import { recordDb } from "./observability.js";
 
 loadEnv();
 
@@ -151,11 +152,16 @@ async function performSupabaseRequest(
       : "return=representation";
   }
 
+  const dbStartedAt = performance.now();
   const response = await fetch(url, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  recordDb(
+    performance.now() - dbStartedAt,
+    method === "GET" || method === "HEAD" ? "read" : "write"
+  );
 
   const payload: unknown =
     method === "HEAD" ? null : await response.json().catch(() => null);

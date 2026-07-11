@@ -30,6 +30,11 @@ import {
 } from "./http-utils.js";
 import { LEADERBOARD_PERIODS } from "./types.js";
 import { sanitizeUsername } from "./username-utils.js";
+import {
+  createTimings,
+  enterRequestTimings,
+  logRequestTiming,
+} from "./observability.js";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -112,6 +117,21 @@ export async function routeRequest(
         : `/${forwardedPath}`
       : url.pathname
   );
+
+  // Instrument this request: bind a timings accumulator to the async context
+  // (the Supabase client adds to it) and log one line when the response ends.
+  const timings = createTimings();
+  const startedAt = performance.now();
+  enterRequestTimings(timings);
+  response.on("finish", () => {
+    logRequestTiming(
+      request.method ?? "?",
+      pathname,
+      response.statusCode,
+      performance.now() - startedAt,
+      timings
+    );
+  });
 
   try {
     if (request.method === "GET" && pathname === "/health") {
