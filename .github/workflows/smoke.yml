@@ -1,0 +1,93 @@
+name: Production smoke test
+
+# Runs after every Vercel deployment reports success, on a 15-minute uptime
+# schedule, and on demand. Checks the exact failure modes that have bitten
+# this project before: a crashing function (500s on every route) and broken
+# nested-path routing (404s on multi-segment routes only).
+on:
+  deployment_status:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  smoke:
+    # For deployment events, only run once the deployment succeeded.
+    if: github.event_name != 'deployment_status' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check backend health (single-segment route)
+        run: |
+          code=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 15 \
+            "https://toronto-guessr-backend.vercel.app/api/health")
+          cat /tmp/health.json
+          test "$code" = "200"
+
+      - name: Check nested routing (multi-segment route)
+        run: |
+          code=$(curl -s -o /tmp/stats.json -w "%{http_code}" --max-time 20 \
+            "https://toronto-guessr-backend.vercel.app/api/stats/games?days=1")
+          head -c 300 /tmp/stats.json
+          test "$code" = "200"
+
+      - name: Check leaderboard responds with data
+        run: |
+          code=$(curl -s -o /tmp/board.json -w "%{http_code}" --max-time 20 \
+            "https://toronto-guessr-backend.vercel.app/api/leaderboard?period=lifetime&limit=1")
+          head -c 300 /tmp/board.json
+          test "$code" = "200"
+          node -e "const d=require('/tmp/board.json'); if (!Array.isArray(d.entries)) process.exit(1)"
+
+      - name: Check CORS preflight carries Max-Age
+        run: |
+          curl -s -i -X OPTIONS --max-time 15 \
+            -H "Origin: https://www.torontoguessr.ca" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: content-type" \
+            "https://toronto-guessr-backend.vercel.app/api/leaderboard" | tee /tmp/preflight.txt
+          grep -qi "access-control-max-age" /tmp/preflight.txt
+
+      - name: Check frontend is serving
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+            "https://www.torontoguessr.ca")
+          echo "frontend: $code"
+          test "$code" = "200"
+
+      - name: Open an outage issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Production smoke test failing";
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "outage",
+            });
+            const body = [
+              `The production smoke test failed on \`${context.eventName}\`.`,
+              "",
+              `Run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join("\n");
+            if (issues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["outage"],
+              });
+            }
