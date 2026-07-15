@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # One npm entry covers both workspaces: the monorepo has a single root
+  # package-lock.json. Minor/patch bumps are grouped into one PR to cut noise;
+  # majors still open individually so breaking changes get their own review.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Keep the pinned action versions (actions/checkout@v4, github/codeql-action,
+  # etc.) current, all batched into a single weekly PR.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        patterns:
+          - "*"
