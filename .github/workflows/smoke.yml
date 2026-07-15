@@ -14,6 +14,12 @@ permissions:
   contents: read
   issues: write
 
+# Serialize per ref but never cancel an in-flight uptime check: a manual or
+# deploy-triggered run must not abort a scheduled probe mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   smoke:
     # For deployment events, only run once the deployment succeeded.
