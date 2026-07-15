@@ -36,6 +36,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: frontend/.next/cache
+          # Rebuild the cache when deps or source change; otherwise reuse the
+          # newest cache for this lockfile so compilation stays incremental.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('frontend/**/*.{js,jsx,ts,tsx}') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
       - name: Production build (includes type checking)
         run: npm run build --workspace frontend
         env:
