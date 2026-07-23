@@ -17,10 +17,11 @@ export default function NotFound() {
         404 · Off the map
       </p>
       <h1 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-        You've wandered off the grid
+        You&apos;ve wandered off the grid
       </h1>
       <p className="mt-4 max-w-md text-pretty text-muted-foreground">
-        This street isn't on our map. Let's get you back to somewhere familiar.
+        This street isn&apos;t on our map. Let&apos;s get you back to somewhere
+        familiar.
       </p>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">

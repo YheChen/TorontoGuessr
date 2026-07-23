@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { buildShareText } from "@/lib/share-text";
 import type { GameMode, GuessResponse } from "@/lib/types";
 
 interface ShareResultsProps {
@@ -11,38 +12,6 @@ interface ShareResultsProps {
   scores: GuessResponse[];
   mode: GameMode;
   challengeDate: string | null;
-}
-
-function tileFor(score: number): string {
-  if (score >= 4000) return "🟩";
-  if (score >= 2000) return "🟦";
-  if (score > 0) return "🟨";
-  return "⬛";
-}
-
-function buildShareText({
-  totalScore,
-  maxScore,
-  scores,
-  mode,
-  challengeDate,
-}: ShareResultsProps): string {
-  const heading =
-    mode === "daily" && challengeDate
-      ? `TorontoGuessr Daily Challenge ${challengeDate}`
-      : "TorontoGuessr";
-  const tiles = scores.map((round) => tileFor(round.score)).join("");
-  const origin =
-    typeof window === "undefined"
-      ? "https://www.torontoguessr.ca"
-      : window.location.origin;
-
-  return [
-    heading,
-    `${totalScore.toLocaleString("en-US")} / ${maxScore.toLocaleString("en-US")}`,
-    tiles,
-    origin,
-  ].join("\n");
 }
 
 /** Copies (or natively shares) a Wordle-style summary of the finished game. */
