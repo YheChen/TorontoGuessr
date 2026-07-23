@@ -2,13 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Trophy, RotateCcw, Save, Check, Flag } from "lucide-react";
+import {
+  Trophy,
+  RotateCcw,
+  Save,
+  Check,
+  Flag,
+  MapPin,
+  Crosshair,
+} from "lucide-react";
 import { GameHUD } from "@/components/game-hud";
-import { GuessPanel } from "@/components/guess-panel";
+import { GameMap } from "@/components/game-map";
 import GamePanorama from "@/components/gamepanorama";
 import { PanoPrefetch } from "@/components/pano-prefetch";
 import { RoundCountdown } from "@/components/round-countdown";
-import { GameResults } from "@/components/game-results";
+import { RoundResultCard } from "@/components/round-result-card";
 import { LoadingScreen, ErrorCard } from "@/components/site/states";
 import { CountUp } from "@/components/site/count-up";
 import { Button } from "@/components/ui/button";
@@ -229,65 +237,184 @@ export default function Game() {
   };
 
   const isPlaying = gameState === "guessing" || gameState === "submitting";
+  const inResults = gameState === "results";
+  // Guessing, submitting, and results all share one mounted stage so the map
+  // instance is reused across the round rather than remounted each transition.
+  const inStage = (isPlaying || inResults) && currentRoundData !== null;
   const maxTotal = totalRounds * MAX_ROUND_SCORE;
   const bestRound = scores.reduce((best, r) => Math.max(best, r.score), 0);
 
+  // The one map is fed the live pin while playing, and the scored
+  // guess-vs-actual pair while showing results.
+  const mapGuessLocation = isPlaying
+    ? guessLocation
+    : (currentResult?.guessLocation ?? null);
+  const mapActualLocation = isPlaying
+    ? null
+    : (currentResult?.actualLocation ?? null);
+
   return (
     <>
-      {/* ───────── Playing: immersive panorama + floating guess panel ───────── */}
-      {isPlaying && currentRoundData && (
+      {/* ── In-game stage: one persistent map shared by guessing and results ── */}
+      {inStage && (
         <section className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-4 lg:px-6">
-          <div className="relative lg:h-[calc(100dvh-8rem)] lg:min-h-[560px]">
-            {/* Panorama: stacked on mobile, fills the stage on desktop */}
-            <div className="relative h-[46vh] min-h-[300px] w-full lg:absolute lg:inset-0 lg:h-full">
-              <GamePanorama
-                panoId={currentRoundData.panoId}
-                heading={currentRoundData.heading}
-                pitch={currentRoundData.pitch}
-                zoom={currentRoundData.zoom}
-              />
+          {inResults && currentResult?.nextRound && (
+            <PanoPrefetch panoId={currentResult.nextRound.round.panoId} />
+          )}
+
+          <div
+            className={cn(
+              "relative",
+              isPlaying
+                ? "lg:h-[calc(100dvh-8rem)] lg:min-h-[560px]"
+                : "lg:grid lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-5",
+            )}
+          >
+            {/* Panorama: fills the stage while playing, hidden during results */}
+            <div
+              className={cn(
+                "relative h-[46vh] min-h-[300px] w-full lg:absolute lg:inset-0 lg:h-full",
+                inResults && "hidden",
+              )}
+            >
+              {isPlaying && currentRoundData && (
+                <GamePanorama
+                  panoId={currentRoundData.panoId}
+                  heading={currentRoundData.heading}
+                  pitch={currentRoundData.pitch}
+                  zoom={currentRoundData.zoom}
+                />
+              )}
             </div>
 
             {/* HUD */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 p-3 sm:p-4">
-              <GameHUD
-                currentRound={currentRound}
-                totalRounds={totalRounds}
-                scores={scores}
-                badgeSlot={
-                  mode === "daily" ? (
-                    <span className="pointer-events-auto inline-flex items-center rounded-full bg-toronto-red px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-white shadow-elevated">
-                      Daily
-                    </span>
-                  ) : undefined
-                }
-                timerSlot={
-                  <RoundCountdown
-                    timeLimit={timeLimit}
-                    roundKey={currentRound}
-                    paused={gameState !== "guessing"}
-                    onExpire={() => void handleSubmitGuess()}
-                  />
-                }
-              />
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-0 z-20 p-3 sm:p-4",
+                inResults && "hidden",
+              )}
+            >
+              {isPlaying && (
+                <GameHUD
+                  currentRound={currentRound}
+                  totalRounds={totalRounds}
+                  scores={scores}
+                  badgeSlot={
+                    mode === "daily" ? (
+                      <span className="pointer-events-auto inline-flex items-center rounded-full bg-toronto-red px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-white shadow-elevated">
+                        Daily
+                      </span>
+                    ) : undefined
+                  }
+                  timerSlot={
+                    <RoundCountdown
+                      timeLimit={timeLimit}
+                      roundKey={currentRound}
+                      paused={gameState !== "guessing"}
+                      onExpire={() => void handleSubmitGuess()}
+                    />
+                  }
+                />
+              )}
             </div>
 
-            {/* Guess panel */}
-            <div className="relative z-20 mt-3 lg:absolute lg:bottom-4 lg:right-4 lg:mt-0 lg:w-[360px] xl:w-[400px]">
-              <GuessPanel
-                guessLocation={guessLocation}
-                onMapClick={handleMapClick}
-                onSubmitGuess={() => void handleSubmitGuess()}
-                isSubmitting={gameState === "submitting"}
-                className="h-[48vh] min-h-[340px] lg:h-[clamp(360px,46vh,520px)]"
-              />
+            {/* Result card: grid column one during results */}
+            <div className={cn("mt-3 lg:mt-0", !inResults && "hidden")}>
+              {inResults && currentResult && (
+                <RoundResultCard
+                  guessLocation={currentResult.guessLocation}
+                  score={currentResult.score}
+                  distance={currentResult.distance}
+                  onNextRound={() => void handleNextRound()}
+                  isLastRound={currentResult.isLastRound}
+                  roundNumber={currentResult.roundNumber}
+                  totalRounds={totalRounds}
+                  rejectedLate={currentResult.guessRejectedLate ?? false}
+                />
+              )}
+            </div>
+
+            {/* The single, persistent map: floating guess panel while playing,
+                comparison map (grid column two) during results. */}
+            <div
+              className={cn(
+                "z-20",
+                isPlaying
+                  ? "relative mt-3 lg:absolute lg:bottom-4 lg:right-4 lg:mt-0 lg:w-[360px] xl:w-[400px]"
+                  : "relative mt-3 lg:mt-0",
+              )}
+            >
+              <div
+                className={cn(
+                  "pointer-events-auto overflow-hidden rounded-2xl",
+                  isPlaying
+                    ? "glass-strong flex h-[48vh] min-h-[340px] flex-col shadow-elevated lg:h-[clamp(360px,46vh,520px)]"
+                    : "surface-card lg:h-full",
+                )}
+              >
+                {/* Guess header (guessing only) */}
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-2 px-3.5 pt-3",
+                    inResults && "hidden",
+                  )}
+                >
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                    <MapPin className="size-3.5 text-toronto-red" />
+                    Your guess
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs font-medium transition-colors",
+                      guessLocation ? "text-success" : "text-muted-foreground",
+                    )}
+                  >
+                    {guessLocation ? "Pin placed" : "Tap the map"}
+                  </span>
+                </div>
+
+                {/* Map canvas (shared instance) */}
+                <div
+                  className={cn(
+                    "p-2.5",
+                    isPlaying
+                      ? "min-h-[240px] flex-1"
+                      : "h-[320px] sm:h-[380px] lg:h-full lg:min-h-[460px]",
+                  )}
+                >
+                  <GameMap
+                    onMapClick={handleMapClick}
+                    guessLocation={mapGuessLocation}
+                    actualLocation={mapActualLocation}
+                    isGuessing={isPlaying}
+                    viewResetKey={currentRound}
+                  />
+                </div>
+
+                {/* Submit (guessing only) */}
+                <div className={cn("px-2.5 pb-2.5", inResults && "hidden")}>
+                  <Button
+                    onClick={() => void handleSubmitGuess()}
+                    disabled={!guessLocation || gameState === "submitting"}
+                    size="lg"
+                    className="w-full rounded-xl shadow-glow"
+                  >
+                    <Crosshair className="size-4" />
+                    {gameState === "submitting"
+                      ? "Submitting…"
+                      : guessLocation
+                        ? "Submit guess"
+                        : "Place a pin to guess"}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
       )}
 
-      {/* ───────── Non-immersive states share a centered container ───────── */}
-      {!isPlaying && (
+      {/* ── loading / error / summary share a centered container ── */}
+      {!inStage && (
         <section className="container py-8 sm:py-10">
           {gameState === "loading" && (
             <div className="mx-auto max-w-xl">
@@ -304,26 +431,6 @@ export default function Game() {
                 message={errorMessage ?? "The game could not continue."}
                 onRetry={() => void startGame()}
                 retryLabel="Try again"
-              />
-            </div>
-          )}
-
-          {gameState === "results" && currentResult?.nextRound && (
-            <PanoPrefetch panoId={currentResult.nextRound.round.panoId} />
-          )}
-
-          {gameState === "results" && currentResult && (
-            <div className="mx-auto max-w-6xl">
-              <GameResults
-                guessLocation={currentResult.guessLocation}
-                actualLocation={currentResult.actualLocation}
-                score={currentResult.score}
-                distance={currentResult.distance}
-                onNextRound={() => void handleNextRound()}
-                isLastRound={currentResult.isLastRound}
-                roundNumber={currentResult.roundNumber}
-                totalRounds={totalRounds}
-                rejectedLate={currentResult.guessRejectedLate ?? false}
               />
             </div>
           )}
