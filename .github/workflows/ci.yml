@@ -15,8 +15,8 @@ jobs:
     name: Backend typecheck and tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -30,8 +30,8 @@ jobs:
     name: Frontend checks and build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -43,7 +43,7 @@ jobs:
       - name: Unit tests
         run: npm run test --workspace frontend
       - name: Cache Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: frontend/.next/cache
           # Rebuild the cache when deps or source change; otherwise reuse the
