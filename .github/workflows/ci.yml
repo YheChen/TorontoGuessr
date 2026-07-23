@@ -27,7 +27,7 @@ jobs:
         run: npm run test --workspace backend
 
   frontend:
-    name: Frontend build
+    name: Frontend checks and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +38,10 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck --workspace frontend
+      - name: Lint
+        run: npm run lint --workspace frontend
+      - name: Unit tests
+        run: npm run test --workspace frontend
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:

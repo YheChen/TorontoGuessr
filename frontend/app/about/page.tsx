@@ -175,7 +175,7 @@ export default function About() {
         <div className="surface-card mt-12 overflow-hidden rounded-2xl p-6 sm:p-8">
           <div className="flex items-center gap-2">
             <MapPin className="size-5 text-toronto-red" />
-            <h3 className="text-lg font-semibold">Where you'll explore</h3>
+            <h3 className="text-lg font-semibold">Where you&apos;ll explore</h3>
           </div>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             The game focuses on downtown Toronto and the surrounding

@@ -21,6 +21,7 @@ import { StatCard } from "@/components/site/stat-card";
 import { LoadingScreen, ErrorCard, EmptyState } from "@/components/site/states";
 import { cn } from "@/lib/utils";
 import { fetchGameStats } from "@/lib/api";
+import { daysSinceLaunch, formatDay } from "@/lib/date-toronto";
 import type { GameStatsResponse } from "@/lib/types";
 
 type RangeKey = "day" | "week" | "month" | "all";
@@ -31,29 +32,6 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string }> = [
   { key: "month", label: "30 days" },
   { key: "all", label: "All time" },
 ];
-
-/** The game launched April 1, 2026; "All time" spans from that date. */
-const LAUNCH_DATE_UTC = Date.UTC(2026, 3, 1);
-const API_MAX_DAYS = 3650;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/** Days from launch through today in Toronto time, inclusive. */
-function daysSinceLaunch(): number {
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-  const [year, month, day] = today.split("-").map(Number);
-  if (!year || !month || !day) {
-    return 90;
-  }
-
-  const todayUtc = Date.UTC(year, month - 1, day);
-  const elapsed = Math.floor((todayUtc - LAUNCH_DATE_UTC) / MS_PER_DAY) + 1;
-  return Math.min(Math.max(elapsed, 1), API_MAX_DAYS);
-}
 
 function rangeToDays(range: RangeKey): number {
   switch (range) {
@@ -68,11 +46,6 @@ function rangeToDays(range: RangeKey): number {
   }
 }
 
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
-
 const chartConfig = {
   gamesStarted: {
     label: "Games started",
@@ -83,19 +56,6 @@ const chartConfig = {
     color: "hsl(var(--success))",
   },
 } satisfies ChartConfig;
-
-/**
- * Format a "YYYY-MM-DD" key without going through Date, which would parse it
- * as UTC midnight and shift the day in negative-offset time zones.
- */
-function formatDay(value: string): string {
-  const [, month, day] = value.split("-");
-  const monthLabel = MONTHS[Number(month) - 1];
-  if (!monthLabel || !day) {
-    return value;
-  }
-  return `${monthLabel} ${Number(day)}`;
-}
 
 export function StatsClient() {
   const [range, setRange] = useState<RangeKey>("month");
