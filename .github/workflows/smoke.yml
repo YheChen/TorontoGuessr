@@ -66,7 +66,7 @@ jobs:
 
       - name: Open an outage issue on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const title = "Production smoke test failing";
@@ -102,7 +102,7 @@ jobs:
       # failure so the tracker reflects a recovered service automatically.
       - name: Close the outage issue on recovery
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: issues } = await github.rest.issues.listForRepo({
