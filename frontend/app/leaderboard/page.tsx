@@ -142,17 +142,24 @@ export default function Leaderboard() {
   }, [board, currentLimit, page, period]);
 
   const handlePeriodChange = (nextPeriod: LeaderboardPeriod) => {
+    // Clicking the already-active period must be a no-op. Otherwise the clear
+    // below strands the UI: no fetch dependency changes, so the effect never
+    // refetches and the empty state shows over the cleared data.
+    if (nextPeriod === period) return;
     setPeriod(nextPeriod);
     setPage(1);
     setIsExpanded(false);
     setLeaderboard(null);
+    setIsLoading(true);
   };
 
   const handleBoardChange = (nextBoard: "global" | "challenge") => {
+    if (nextBoard === board) return;
     setBoard(nextBoard);
     setPage(1);
     setIsExpanded(false);
     setLeaderboard(null);
+    setIsLoading(true);
   };
 
   const activeOption = LEADERBOARD_OPTIONS.find(
