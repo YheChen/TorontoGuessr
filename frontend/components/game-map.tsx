@@ -22,6 +22,13 @@ interface GameMapProps {
   actualLocation: LatLng | null;
   isGuessing: boolean;
   className?: string;
+  /**
+   * Changes once per new guessing round. When the same map instance is reused
+   * across guessing and results (rather than remounted), a change here returns
+   * the view to the Toronto overview so the next round does not start framed on
+   * the previous round's result.
+   */
+  viewResetKey?: string | number;
 }
 
 const centerToronto: LatLng = { lat: 43.6532, lng: -79.3832 };
@@ -62,6 +69,7 @@ export function GameMap({
   actualLocation,
   isGuessing,
   className,
+  viewResetKey,
 }: GameMapProps) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -101,6 +109,15 @@ export function GameMap({
       map.setZoom(14);
     }
   }, [isGuessing, guessLocation, actualLocation]);
+
+  // Reset to the Toronto overview at the start of each new guessing round. A
+  // remount used to do this for free; a reused instance must do it explicitly.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isGuessing) return;
+    map.setCenter(centerToronto);
+    map.setZoom(11);
+  }, [viewResetKey, isGuessing]);
 
   if (!isLoaded) {
     return (
