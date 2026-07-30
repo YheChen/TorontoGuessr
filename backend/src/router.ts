@@ -30,11 +30,20 @@ import {
 } from "./http-utils.js";
 import { GAME_MODES, LEADERBOARD_PERIODS, type GameRound } from "./types.js";
 import { sanitizeUsername } from "./username-utils.js";
-import { normalizeChallengeCode } from "./challenge-code.js";
+import { normalizeShortCode } from "./short-code.js";
 import {
   createChallengeFromSession,
   getChallengeRounds,
 } from "./challenge-store.js";
+import {
+  advanceLobby,
+  createLobby,
+  getLobbyState,
+  joinLobby,
+  leaveLobby,
+  startLobby,
+  submitLobbyGuess,
+} from "./lobby-store.js";
 import {
   createTimings,
   enterRequestTimings,
@@ -56,7 +65,7 @@ const usernameSchema = z.object({
 });
 const startGameSchema = z.object({
   mode: z.enum(GAME_MODES).default("classic"),
-  /** Required when mode is "challenge"; validated by normalizeChallengeCode. */
+  /** Required when mode is "challenge"; validated by normalizeShortCode. */
   challengeCode: z.string().max(32).optional(),
 });
 const leaderboardPeriodSchema = z.enum(LEADERBOARD_PERIODS);
@@ -73,6 +82,37 @@ const adminLocationReviewQuerySchema = z.object({
 const adminLocationReviewActionSchema = z.object({
   action: z.enum(["accept", "reject", "undo"]),
 });
+const lobbyNameSchema = z.object({
+  displayName: z.string().optional(),
+});
+const lobbyGuessSchema = z.object({
+  guessLocation: z
+    .object({ lat: z.number(), lng: z.number() })
+    .nullable()
+    .optional(),
+});
+
+/**
+ * Player credential for lobby routes. Sent as a header rather than a query
+ * parameter so it never lands in a URL, matching the admin-token convention.
+ */
+function lobbyPlayerToken(request: IncomingMessage): string {
+  const header = request.headers["x-player-token"];
+  const token = typeof header === "string" ? header.trim() : "";
+  if (!token) {
+    throw createHttpError(401, "Missing player token.");
+  }
+  return token;
+}
+
+function requireLobbyCode(rawCode: string): string {
+  const code = normalizeShortCode(rawCode);
+  if (!code) {
+    throw createHttpError(400, "That lobby code is not valid.");
+  }
+  return code;
+}
+
 const gameStatsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(3650).optional(),
   timeZone: z.string().trim().min(1).max(100).optional(),
@@ -195,7 +235,7 @@ export async function routeRequest(
       if (mode === "challenge") {
         // Shared challenge: replay the snapshotted rounds so every player who
         // opens the link sees exactly the same five locations.
-        challengeCode = normalizeChallengeCode(requestedCode);
+        challengeCode = normalizeShortCode(requestedCode);
         if (!challengeCode) {
           throw createHttpError(400, "That challenge code is not valid.");
         }
@@ -347,6 +387,136 @@ export async function routeRequest(
           parsedBody.action
         ),
       });
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/lobbies") {
+      const rateLimit = checkRateLimit(`lobby-create:${clientIp(request)}`, {
+        limit: 10,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(
+          response,
+          429,
+          "Too many new lobbies from this address. Please wait a moment and try again."
+        );
+        return;
+      }
+
+      const { displayName } = lobbyNameSchema.parse(await readBody(request));
+      sendJson(response, 200, await createLobby(displayName ?? ""));
+      return;
+    }
+
+    const lobbyJoinParams = matchRoute(pathname, "/lobbies/:code/join");
+    if (request.method === "POST" && lobbyJoinParams?.code) {
+      const rateLimit = checkRateLimit(`lobby-join:${clientIp(request)}`, {
+        limit: 20,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(response, 429, "Too many join attempts. Please wait a moment.");
+        return;
+      }
+
+      const { displayName } = lobbyNameSchema.parse(await readBody(request));
+      sendJson(
+        response,
+        200,
+        await joinLobby(requireLobbyCode(lobbyJoinParams.code), displayName ?? "")
+      );
+      return;
+    }
+
+    const lobbyStateParams = matchRoute(pathname, "/lobbies/:code/state");
+    if (request.method === "GET" && lobbyStateParams?.code) {
+      // Clients poll this every couple of seconds, so it needs a far higher
+      // ceiling than the mutating routes.
+      const rateLimit = checkRateLimit(`lobby-state:${clientIp(request)}`, {
+        limit: 120,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(response, 429, "Polling too quickly. Please slow down.");
+        return;
+      }
+
+      const header = request.headers["x-player-token"];
+      const token = typeof header === "string" && header.trim() ? header.trim() : null;
+      // Never cached: lobby state must always be fresh.
+      sendJson(
+        response,
+        200,
+        await getLobbyState(requireLobbyCode(lobbyStateParams.code), token)
+      );
+      return;
+    }
+
+    const lobbyStartParams = matchRoute(pathname, "/lobbies/:code/start");
+    if (request.method === "POST" && lobbyStartParams?.code) {
+      sendJson(
+        response,
+        200,
+        await startLobby(
+          requireLobbyCode(lobbyStartParams.code),
+          lobbyPlayerToken(request)
+        )
+      );
+      return;
+    }
+
+    const lobbyGuessParams = matchRoute(pathname, "/lobbies/:code/guess");
+    if (request.method === "POST" && lobbyGuessParams?.code) {
+      const rateLimit = checkRateLimit(`lobby-guess:${clientIp(request)}`, {
+        limit: 60,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(response, 429, "Too many guesses. Please wait a moment.");
+        return;
+      }
+
+      const parsedBody = lobbyGuessSchema.parse(await readBody(request));
+      sendJson(
+        response,
+        200,
+        await submitLobbyGuess(
+          requireLobbyCode(lobbyGuessParams.code),
+          lobbyPlayerToken(request),
+          parsedBody.guessLocation ?? null
+        )
+      );
+      return;
+    }
+
+    const lobbyNextParams = matchRoute(pathname, "/lobbies/:code/next");
+    if (request.method === "POST" && lobbyNextParams?.code) {
+      sendJson(
+        response,
+        200,
+        await advanceLobby(
+          requireLobbyCode(lobbyNextParams.code),
+          lobbyPlayerToken(request)
+        )
+      );
+      return;
+    }
+
+    const lobbyLeaveParams = matchRoute(pathname, "/lobbies/:code/leave");
+    if (request.method === "POST" && lobbyLeaveParams?.code) {
+      sendJson(
+        response,
+        200,
+        await leaveLobby(
+          requireLobbyCode(lobbyLeaveParams.code),
+          lobbyPlayerToken(request)
+        )
+      );
       return;
     }
 
