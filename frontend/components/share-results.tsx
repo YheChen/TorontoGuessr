@@ -4,12 +4,15 @@ import { useState } from "react";
 import { Check, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildShareText } from "@/lib/share-text";
-import type { GameMode, GuessResponse } from "@/lib/types";
+import type { GameMode, RoundSummary } from "@/lib/types";
 
 interface ShareResultsProps {
   totalScore: number;
   maxScore: number;
-  scores: GuessResponse[];
+  // Only the per-round score is used, via buildShareText. Narrowed from
+  // GuessResponse because the summary route no longer returns answer
+  // coordinates and this component never needed them.
+  scores: RoundSummary[];
   mode: GameMode;
   challengeDate: string | null;
 }

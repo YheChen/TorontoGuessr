@@ -41,6 +41,7 @@ import type {
   GuessLocation,
   GuessResponse,
   NextRoundResponse,
+  RoundSummary,
   StartGameResponse,
   SummaryResponse,
 } from "@/lib/types";
@@ -73,7 +74,10 @@ export default function Game() {
     null,
   );
   const [gameState, setGameState] = useState<GameState>("loading");
-  const [scores, setScores] = useState<GuessResponse[]>([]);
+  // RoundSummary, not GuessResponse: the summary route no longer returns answer
+  // coordinates, and nothing here needs them. A full GuessResponse still assigns
+  // cleanly into this array when a guess is appended.
+  const [scores, setScores] = useState<RoundSummary[]>([]);
   const [currentResult, setCurrentResult] = useState<GuessResponse | null>(
     null,
   );

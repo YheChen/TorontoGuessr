@@ -565,12 +565,33 @@ export async function submitGuess(
   };
 }
 
+/**
+ * The end-of-game summary.
+ *
+ * Deliberately does NOT return actualLocation or guessLocation, even though both
+ * sit in session.results.
+ *
+ * This route is reachable by session id alone, with no authentication, and
+ * session ids are PUBLIC: getLeaderboard returns them as entry.id. Returning
+ * results verbatim therefore handed anyone the full answer key for any finished
+ * game listed on the leaderboard. That was worst for the daily challenge, where
+ * every player gets the same five rounds, so one stranger's finished daily game
+ * was the answer key for everybody's that day.
+ *
+ * Nothing is lost by omitting them: a player already receives each round's
+ * actualLocation in the response to their own guess, which is the only moment it
+ * is theirs to know, and the summary UI renders only the score and distance.
+ */
 export async function getGameSummary(sessionId: string) {
   const session = await requireGameSession(sessionId);
   return {
     username: session.username,
     totalScore: session.totalScore,
-    rounds: session.results,
+    rounds: session.results.map((round) => ({
+      roundNumber: round.roundNumber,
+      score: round.score,
+      distance: round.distance,
+    })),
   };
 }
 

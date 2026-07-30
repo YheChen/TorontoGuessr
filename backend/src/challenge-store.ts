@@ -63,13 +63,35 @@ export async function createChallengeFromSession(
     throw unavailableError();
   }
 
-  const session = await selectSingleRow<Pick<GameSessionRecord, "rounds">>(
-    GAME_SESSIONS_TABLE,
-    { columns: "rounds", filters: { id: sessionId } }
-  );
+  const session = await selectSingleRow<
+    Pick<GameSessionRecord, "rounds" | "status">
+  >(GAME_SESSIONS_TABLE, {
+    columns: "status,rounds",
+    filters: { id: sessionId },
+  });
 
   if (!session) {
     throw createHttpError(404, "Game session not found.");
+  }
+
+  // Only a FINISHED game may be snapshotted, and this is a security boundary
+  // rather than tidiness.
+  //
+  // A session row holds every round's answer coordinates from the moment it is
+  // created. Without this check a player could mint a challenge from their own
+  // in-progress game, start a second game from that code, submit five null
+  // guesses to read each round's actualLocation out of the guess responses, and
+  // then replay the exact coordinates into the original game for a perfect
+  // 25,000. The replay session is mode=challenge and excluded from the global
+  // board, so only the perfect score would have been published.
+  //
+  // The frontend already only offers the link on the summary screen
+  // (components/challenge-friend.tsx), so nothing legitimate is being refused.
+  if (session.status !== "finished") {
+    throw createHttpError(
+      409,
+      "You can only create a challenge link after finishing the game."
+    );
   }
 
   const rounds = Array.isArray(session.rounds) ? session.rounds : [];
