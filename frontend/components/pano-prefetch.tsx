@@ -35,10 +35,19 @@ export function PanoPrefetch({ panoId }: { panoId: string }) {
   }, [isLoaded, panoId]);
 
   return (
+    // Two elements on purpose. Google Maps writes inline styles onto whatever
+    // node it is handed, and one of them is `position: relative`, which
+    // outranks a positioning class and drops the node back into normal flow.
+    // When that happened here, this 256px prefetch surface became 256px of
+    // blank space above the round results on every round that had a next round
+    // to warm. Keeping the positioning on an outer wrapper that Maps never
+    // touches makes that impossible, and matches what GamePanorama already
+    // does.
     <div
-      ref={containerRef}
       aria-hidden="true"
       className="pointer-events-none fixed left-[-9999px] top-0 h-64 w-64"
-    />
+    >
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
   );
 }
