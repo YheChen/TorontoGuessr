@@ -30,8 +30,19 @@ export function MapThemeProvider({ children }: { children: ReactNode }) {
   const [mapTheme, setMapThemeState] = useState<MapTheme>("light");
 
   // Hydrate the stored preference after mount to avoid SSR mismatch.
+  //
+  // The read is guarded for the same reason the write below is: touching
+  // window.localStorage THROWS SecurityError when storage is blocked, it does not
+  // return null. This provider wraps the whole app from the root layout, so an
+  // unguarded throw here took out every route rather than just the map toggle.
+  // The hazard was already recognised on the write path and missed on the read.
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // Storage blocked (private mode, cookies disabled). Keep the default.
+    }
     if (stored === "light" || stored === "dark") {
       setMapThemeState(stored);
     }

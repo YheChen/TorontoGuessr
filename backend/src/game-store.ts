@@ -310,33 +310,23 @@ export async function createGameSession(
   return mapSessionRecord(record);
 }
 
+/**
+ * The current round as the browser may see it: pano id and camera only, never
+ * the answer coordinates.
+ *
+ * Reads only. It used to accept a touchDeadline option that rewrote
+ * round_started_at to now, so that serving a round restarted its clock. That was
+ * an unbounded write on an unauthenticated route: repeated calls kept moving the
+ * deadline and the 60s + 15s timeout in submitGuess could never fire. The clock
+ * is baselined at insert for the first round and at guess time for every round
+ * after, which is sufficient.
+ */
 export async function getRoundForClient(
-  sessionId: string,
-  { touchDeadline = false }: { touchDeadline?: boolean } = {}
+  sessionId: string
 ): Promise<RoundPayload | null> {
   const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     return null;
-  }
-
-  // The player is being served this round now; restart its deadline clock.
-  if (touchDeadline && sessionSchemaExtended) {
-    try {
-      await updateSingleRow<GameSessionRecord>(
-        GAME_SESSIONS_TABLE,
-        { round_started_at: new Date().toISOString() },
-        {
-          filters: { id: sessionId, status: "in_progress" },
-          columns: "id",
-        }
-      );
-    } catch (error) {
-      if (isMissingColumnError(error)) {
-        sessionSchemaExtended = false;
-      } else {
-        throw error;
-      }
-    }
   }
 
   return buildRoundPayload(session);
@@ -565,12 +555,33 @@ export async function submitGuess(
   };
 }
 
+/**
+ * The end-of-game summary.
+ *
+ * Deliberately does NOT return actualLocation or guessLocation, even though both
+ * sit in session.results.
+ *
+ * This route is reachable by session id alone, with no authentication, and
+ * session ids are PUBLIC: getLeaderboard returns them as entry.id. Returning
+ * results verbatim therefore handed anyone the full answer key for any finished
+ * game listed on the leaderboard. That was worst for the daily challenge, where
+ * every player gets the same five rounds, so one stranger's finished daily game
+ * was the answer key for everybody's that day.
+ *
+ * Nothing is lost by omitting them: a player already receives each round's
+ * actualLocation in the response to their own guess, which is the only moment it
+ * is theirs to know, and the summary UI renders only the score and distance.
+ */
 export async function getGameSummary(sessionId: string) {
   const session = await requireGameSession(sessionId);
   return {
     username: session.username,
     totalScore: session.totalScore,
-    rounds: session.results,
+    rounds: session.results.map((round) => ({
+      roundNumber: round.roundNumber,
+      score: round.score,
+      distance: round.distance,
+    })),
   };
 }
 

@@ -54,14 +54,41 @@ import { requireAdminToken } from "./admin-auth.js";
 import { optionalUser, requireUser } from "./auth.js";
 import { getOrCreateProfile, setDisplayName } from "./profile-store.js";
 
+/**
+ * A guessed point on Earth.
+ *
+ * Bounded, not just `z.number()`. A bare number accepts Infinity (JSON `1e999`
+ * parses to it), which made calculateDistance return NaN; JSON.stringify then
+ * wrote `distance: null` and `guessLocation: {"lat": null, "lng": 0}` into
+ * lobby_players.results, and the reveal serves that to every other player in the
+ * lobby, where the Google Maps calls throw on a null latitude. Bounding the range
+ * rejects it at the edge instead of relying on every downstream consumer.
+ */
+const coordinateSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+
+/**
+ * A session id from the URL, rejected early if it is not a UUID.
+ *
+ * Not cosmetic validation. An unvalidated segment becomes the `id` filter value,
+ * PostgREST echoes it verbatim in its uuid cast error, and isMissingColumnError()
+ * pattern-matches that error TEXT. A crafted id could therefore make the message
+ * look like a missing-column error and latch game-store's module-level
+ * sessionSchemaExtended flag to false for the life of the warm instance, silently
+ * disabling round-deadline enforcement and daily challenges.
+ */
+function requireSessionId(value: string): string {
+  const parsed = z.string().uuid().safeParse(value);
+  if (!parsed.success) {
+    throw createHttpError(400, "That game session id is not valid.");
+  }
+  return parsed.data;
+}
+
 const guessSchema = z.object({
-  guessLocation: z
-    .object({
-      lat: z.number(),
-      lng: z.number(),
-    })
-    .nullable()
-    .optional(),
+  guessLocation: coordinateSchema.nullable().optional(),
 });
 const usernameSchema = z.object({
   username: z.string().optional(),
@@ -89,10 +116,7 @@ const lobbyNameSchema = z.object({
   displayName: z.string().optional(),
 });
 const lobbyGuessSchema = z.object({
-  guessLocation: z
-    .object({ lat: z.number(), lng: z.number() })
-    .nullable()
-    .optional(),
+  guessLocation: coordinateSchema.nullable().optional(),
 });
 
 /**
@@ -265,7 +289,7 @@ export async function routeRequest(
       const user = await optionalUser(request);
       const parsedBody = guessSchema.parse(await readBody(request));
       const result = await submitGuess(
-        guessParams.sessionId,
+        requireSessionId(guessParams.sessionId),
         parsedBody.guessLocation ?? null,
         { userId: user?.userId ?? null }
       );
@@ -275,13 +299,19 @@ export async function routeRequest(
 
     const nextParams = matchRoute(pathname, "/games/:sessionId/next");
     if (request.method === "POST" && nextParams?.sessionId) {
-      const nextRound = await getRoundForClient(nextParams.sessionId, {
-        touchDeadline: true,
-      });
+      const sessionId = requireSessionId(nextParams.sessionId);
+      // Deliberately does NOT reset the round deadline. It used to, which meant
+      // a client could keep pinging /next during a round and push the 60s + 15s
+      // server-side timeout out indefinitely, defeating the timer entirely. The
+      // clock is already baselined twice without help: at insert for round one,
+      // and at guess time for every round after (game-store.ts). The prefetched
+      // panorama makes the transition near-instant and the 15s grace absorbs the
+      // round trip, so nothing legitimate loses time.
+      const nextRound = await getRoundForClient(sessionId);
       if (nextRound === null) {
         sendJson(response, 200, {
           gameFinished: true,
-          summary: await getGameSummary(nextParams.sessionId),
+          summary: await getGameSummary(sessionId),
         });
         return;
       }
@@ -310,7 +340,7 @@ export async function routeRequest(
       sendJson(
         response,
         200,
-        await createChallengeFromSession(challengeParams.sessionId)
+        await createChallengeFromSession(requireSessionId(challengeParams.sessionId))
       );
       return;
     }
@@ -320,7 +350,7 @@ export async function routeRequest(
       const parsedBody = usernameSchema.parse(await readBody(request));
       const username = sanitizeUsername(parsedBody.username);
       sendJson(response, 200, {
-        saved: await saveUsername(usernameParams.sessionId, username),
+        saved: await saveUsername(requireSessionId(usernameParams.sessionId), username),
       });
       return;
     }

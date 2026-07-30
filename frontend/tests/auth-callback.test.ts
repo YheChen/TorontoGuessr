@@ -59,6 +59,25 @@ describe("readAuthCallback", () => {
     expect(result.kind).toBe("error");
   });
 
+  it("does not inherit a message from Object.prototype", () => {
+    // The keys come from a URL. A plain object literal is indexable with
+    // __proto__, which resolved to Object.prototype: truthy, typed string, not
+    // one, and it reached ErrorCard as a React child and threw.
+    for (const key of ["__proto__", "constructor", "toString", "valueOf"]) {
+      const result = readAuthCallback(`?error_code=${key}`, "");
+      expect(result.kind).toBe("error");
+      expect(typeof (result as { message: unknown }).message).toBe("string");
+    }
+  });
+
+  it("still prefers the server description over a prototype key", () => {
+    const result = readAuthCallback(
+      "?error_code=__proto__&error_description=Something+specific",
+      ""
+    );
+    expect(result).toEqual({ kind: "error", message: "Something specific" });
+  });
+
   it("prefers an error in the hash over tokens in the hash", () => {
     const result = readAuthCallback(
       "",
