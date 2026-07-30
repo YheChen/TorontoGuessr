@@ -45,9 +45,17 @@ const STEPS = [
 
 const SCORING = [
   { range: "Within 100 m", points: "5,000 pts", tone: "text-success" },
-  { range: "A few blocks", points: "Partial credit", tone: "text-primary" },
-  { range: "Right neighborhood", points: "Solid points", tone: "text-medal-gold" },
-  { range: "Over 2 km away", points: "0 pts", tone: "text-muted-foreground" },
+  { range: "Same few blocks", points: "About 4,000 pts", tone: "text-primary" },
+  {
+    range: "Right neighborhood",
+    points: "About half marks",
+    tone: "text-medal-gold",
+  },
+  {
+    range: "Across the city",
+    points: "Almost nothing",
+    tone: "text-muted-foreground",
+  },
 ] as const;
 
 const TECH = [
