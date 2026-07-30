@@ -1,4 +1,5 @@
 import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase-client";
+import { isLikelyEmail, normalizeEmail } from "@/lib/email";
 
 /**
  * Optional player accounts.
@@ -91,12 +92,24 @@ export async function signInAnonymously(
   };
 }
 
+/** Where Supabase sends a player after they open a link from their inbox. */
+function authCallbackUrl(): string {
+  return `${window.location.origin}/auth/callback`;
+}
+
 /**
- * Attach an email to the current account so it can be recovered on another
- * device. The user id does not change, so existing progress carries over with
- * no migration.
+ * Email a sign-in link.
+ *
+ * This is how someone reaches an existing account from a device that has never
+ * held its session, which is the whole reason attaching an email is worth doing.
+ *
+ * `shouldCreateUser` is left at its default of true deliberately. Setting it to
+ * false makes an unknown address fail differently from a known one, which turns
+ * this form into an account-enumeration oracle. Leaving it true keeps the
+ * response identical either way and doubles as sign-up, so the copy shown to the
+ * player promises a link rather than welcoming them back.
  */
-export async function attachEmail(
+export async function sendMagicLink(
   email: string,
   captchaToken: string
 ): Promise<{ error: string | null }> {
@@ -105,11 +118,45 @@ export async function attachEmail(
     return { error: "Accounts are not available right now." };
   }
 
+  const address = normalizeEmail(email);
+  if (!isLikelyEmail(address)) {
+    return { error: "That does not look like an email address." };
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: address,
+    options: { emailRedirectTo: authCallbackUrl(), captchaToken },
+  });
+
+  return { error: error ? friendlyAuthError(error.message) : null };
+}
+
+/**
+ * Attach an email to the current account so it can be reached from another
+ * device. The user id does not change, so the streak, display name, and
+ * leaderboard name all carry over with no migration.
+ *
+ * Takes no captcha token: `updateUser` accepts only `emailRedirectTo` (checked
+ * against the installed SDK types). Captcha protection guards the
+ * unauthenticated endpoints, and this call is authenticated.
+ */
+export async function attachEmail(
+  email: string
+): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { error: "Accounts are not available right now." };
+  }
+
+  const address = normalizeEmail(email);
+  if (!isLikelyEmail(address)) {
+    return { error: "That does not look like an email address." };
+  }
+
   const { error } = await supabase.auth.updateUser(
-    { email },
-    { emailRedirectTo: `${window.location.origin}/` }
+    { email: address },
+    { emailRedirectTo: authCallbackUrl() }
   );
-  void captchaToken;
 
   return { error: error ? friendlyAuthError(error.message) : null };
 }
@@ -145,8 +192,22 @@ function friendlyAuthError(message: string): string {
   if (lower.includes("already been registered") || lower.includes("already exists")) {
     return "That email is already linked to another account.";
   }
+  if (lower.includes("email rate limit")) {
+    return "Too many emails requested. Please wait a few minutes and try again.";
+  }
+  // Supabase throttles repeat sends with "For security purposes, you can only
+  // request this after N seconds", which reads like an accusation out of context.
+  if (lower.includes("for security purposes")) {
+    return "A link was just sent. Please wait a moment before asking for another.";
+  }
   if (lower.includes("rate limit") || lower.includes("too many")) {
     return "Too many attempts. Please wait a moment and try again.";
+  }
+  if (lower.includes("signups not allowed") || lower.includes("signup is disabled")) {
+    return "New accounts are not being accepted right now.";
+  }
+  if (lower.includes("invalid email") || lower.includes("unable to validate email")) {
+    return "That does not look like an email address.";
   }
   return message;
 }
