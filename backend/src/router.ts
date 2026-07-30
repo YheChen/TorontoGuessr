@@ -51,6 +51,8 @@ import {
 } from "./observability.js";
 import { checkRateLimit, clientIp } from "./rate-limit.js";
 import { requireAdminToken } from "./admin-auth.js";
+import { requireUser } from "./auth.js";
+import { getOrCreateProfile, setDisplayName } from "./profile-store.js";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -113,6 +115,10 @@ function requireLobbyCode(rawCode: string): string {
   }
   return code;
 }
+
+const displayNameSchema = z.object({
+  displayName: z.string().max(64).optional(),
+});
 
 const gameStatsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(3650).optional(),
@@ -495,6 +501,33 @@ export async function routeRequest(
           lobbyPlayerToken(request)
         )
       );
+      return;
+    }
+
+    // Accounts are optional: only these routes require a signed-in user.
+    if (request.method === "GET" && pathname === "/me") {
+      sendJson(response, 200, {
+        profile: await getOrCreateProfile(await requireUser(request)),
+      });
+      return;
+    }
+
+    if (request.method === "PATCH" && pathname === "/me") {
+      const rateLimit = checkRateLimit(`profile-update:${clientIp(request)}`, {
+        limit: 20,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(response, 429, "Too many updates. Please wait a moment.");
+        return;
+      }
+
+      const user = await requireUser(request);
+      const body = displayNameSchema.parse(await readBody(request));
+      sendJson(response, 200, {
+        profile: await setDisplayName(user, body.displayName),
+      });
       return;
     }
 
