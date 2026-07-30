@@ -101,11 +101,24 @@ export function createChallenge(sessionId: string) {
   });
 }
 
+/**
+ * Sends the token when there is one, so the guess that finishes a game can be
+ * filed under the player's account. A guest sends no header and is unaffected;
+ * the backend uses optionalUser and never requires one.
+ *
+ * Attribution has to happen here rather than on the username route, because the
+ * leaderboard publishes session ids, so anything keyed only on a session id
+ * would let a signed-in player claim a stranger's finished game.
+ */
 export function submitGuess(sessionId: string, guessLocation: GuessLocation | null) {
-  return request<GuessResponse>(`/games/${sessionId}/guess`, {
-    method: "POST",
-    body: JSON.stringify({ guessLocation }),
-  });
+  return request<GuessResponse>(
+    `/games/${sessionId}/guess`,
+    {
+      method: "POST",
+      body: JSON.stringify({ guessLocation }),
+    },
+    { authenticated: true }
+  );
 }
 
 export function fetchNextRound(sessionId: string) {
