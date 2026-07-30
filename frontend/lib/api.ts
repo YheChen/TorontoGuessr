@@ -1,12 +1,15 @@
 import type {
   CreateChallengeResponse,
+  CreateLobbyResponse,
   DeleteRejectedLocationsResponse,
   GameMode,
   GameStatsResponse,
   GuessLocation,
   GuessResponse,
+  JoinLobbyResponse,
   LeaderboardPeriod,
   LeaderboardResponse,
+  LobbyState,
   LocationReviewQueueResponse,
   NextRoundResponse,
   SaveScoreResponse,
@@ -101,6 +104,74 @@ export async function fetchLeaderboard(
     `/leaderboard?period=${encodeURIComponent(period)}&board=${board}&page=${page}&limit=${limit}`
   );
   return response;
+}
+
+/**
+ * Lobby routes authenticate the player with a header rather than a query
+ * parameter, so the token never lands in a URL.
+ */
+function getPlayerHeaders(playerToken: string) {
+  return { "x-player-token": playerToken };
+}
+
+export function createLobby(displayName: string) {
+  return request<CreateLobbyResponse>("/lobbies", {
+    method: "POST",
+    body: JSON.stringify({ displayName }),
+  });
+}
+
+export function joinLobby(joinCode: string, displayName: string) {
+  return request<JoinLobbyResponse>(
+    `/lobbies/${encodeURIComponent(joinCode)}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({ displayName }),
+    }
+  );
+}
+
+export function fetchLobbyState(joinCode: string, playerToken?: string | null) {
+  return request<LobbyState>(`/lobbies/${encodeURIComponent(joinCode)}/state`, {
+    headers: playerToken ? getPlayerHeaders(playerToken) : {},
+    cache: "no-store",
+  });
+}
+
+export function startLobby(joinCode: string, playerToken: string) {
+  return request<LobbyState>(`/lobbies/${encodeURIComponent(joinCode)}/start`, {
+    method: "POST",
+    headers: getPlayerHeaders(playerToken),
+  });
+}
+
+export function submitLobbyGuess(
+  joinCode: string,
+  playerToken: string,
+  guessLocation: GuessLocation | null
+) {
+  return request<LobbyState>(`/lobbies/${encodeURIComponent(joinCode)}/guess`, {
+    method: "POST",
+    headers: getPlayerHeaders(playerToken),
+    body: JSON.stringify({ guessLocation }),
+  });
+}
+
+export function advanceLobby(joinCode: string, playerToken: string) {
+  return request<LobbyState>(`/lobbies/${encodeURIComponent(joinCode)}/next`, {
+    method: "POST",
+    headers: getPlayerHeaders(playerToken),
+  });
+}
+
+export function leaveLobby(joinCode: string, playerToken: string) {
+  return request<{ left: boolean }>(
+    `/lobbies/${encodeURIComponent(joinCode)}/leave`,
+    {
+      method: "POST",
+      headers: getPlayerHeaders(playerToken),
+    }
+  );
 }
 
 function getAdminHeaders(adminToken: string) {

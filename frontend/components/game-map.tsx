@@ -16,6 +16,14 @@ interface LatLng {
   lng: number;
 }
 
+/** One other player's pin, drawn in their scoreboard colour. */
+export interface GuessPin {
+  id: string;
+  label: string;
+  location: LatLng;
+  color: string;
+}
+
 interface GameMapProps {
   onMapClick?: (lat: number, lng: number) => void;
   guessLocation: LatLng | null;
@@ -29,6 +37,12 @@ interface GameMapProps {
    * the previous round's result.
    */
   viewResetKey?: string | number;
+  /**
+   * Every player's pin, for a multiplayer reveal. When set, these are drawn
+   * alongside `guessLocation` and all of them are framed. Single-player passes
+   * nothing and behaves exactly as before.
+   */
+  guessPins?: GuessPin[];
 }
 
 const centerToronto: LatLng = { lat: 43.6532, lng: -79.3832 };
@@ -70,6 +84,7 @@ export function GameMap({
   isGuessing,
   className,
   viewResetKey,
+  guessPins,
 }: GameMapProps) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -94,21 +109,35 @@ export function GameMap({
     mapRef.current = null;
   }, []);
 
-  // When showing results, frame both markers; otherwise rest on Toronto.
+  // Frame everything worth seeing on a reveal: the answer, your pin, and in a
+  // lobby every other player's pin too. Otherwise rest on Toronto.
+  const pinKey = useMemo(
+    () =>
+      (guessPins ?? [])
+        .map((pin) => `${pin.id}:${pin.location.lat},${pin.location.lng}`)
+        .join("|"),
+    [guessPins],
+  );
   useEffect(() => {
     const map = mapRef.current;
     if (!map || isGuessing) return;
 
-    if (guessLocation && actualLocation) {
+    const points: LatLng[] = [];
+    if (actualLocation) points.push(actualLocation);
+    if (guessLocation) points.push(guessLocation);
+    for (const pin of guessPins ?? []) points.push(pin.location);
+
+    if (points.length > 1) {
       const bounds = new google.maps.LatLngBounds();
-      bounds.extend(guessLocation);
-      bounds.extend(actualLocation);
+      for (const point of points) bounds.extend(point);
       map.fitBounds(bounds, 72);
-    } else if (actualLocation) {
-      map.setCenter(actualLocation);
+    } else if (points.length === 1 && points[0]) {
+      map.setCenter(points[0]);
       map.setZoom(14);
     }
-  }, [isGuessing, guessLocation, actualLocation]);
+    // pinKey stands in for guessPins so a new array identity alone does not
+    // refit the view while the player is panning around.
+  }, [isGuessing, guessLocation, actualLocation, pinKey, guessPins]);
 
   // Reset to the Toronto overview at the start of each new guessing round. A
   // remount used to do this for free; a reused instance must do it explicitly.
@@ -193,6 +222,32 @@ export function GameMap({
             }}
           />
         )}
+
+        {/* Lobby reveal: one pin per player, each tied to the answer. */}
+        {(guessPins ?? []).map((pin) => (
+          <MarkerF
+            key={pin.id}
+            position={pin.location}
+            title={pin.label}
+            icon={{
+              url: pinDataUri(pin.color),
+              scaledSize: new google.maps.Size(26, 35),
+              anchor: new google.maps.Point(13, 35),
+            }}
+          />
+        ))}
+        {actualLocation &&
+          (guessPins ?? []).map((pin) => (
+            <PolylineF
+              key={`line-${pin.id}`}
+              path={[pin.location, actualLocation]}
+              options={{
+                strokeColor: pin.color,
+                strokeOpacity: 0.55,
+                strokeWeight: 2,
+              }}
+            />
+          ))}
       </GoogleMap>
 
       <button
