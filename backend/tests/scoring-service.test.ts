@@ -33,22 +33,87 @@ describe("calculateScore", () => {
     expect(calculateScore(0.1)).toBe(5000);
   });
 
-  it("awards 0 at 2 km or beyond", () => {
-    expect(calculateScore(2)).toBe(0);
-    expect(calculateScore(25)).toBe(0);
+  it("halves the score at one kilometre past the plateau", () => {
+    // The defining constant: 1.1 km is roughly the radius of an average Toronto
+    // neighbourhood, so "right neighbourhood" and "about half marks" coincide.
+    expect(calculateScore(1.1)).toBe(2500);
   });
 
-  it("awards half the points at the midpoint of the decay range", () => {
-    // Decay is linear from 0.1 km (5000) to 2 km (0); midpoint is 1.05 km.
-    expect(calculateScore(1.05)).toBe(2500);
+  /**
+   * These are the reference vectors. The same table is asserted inside
+   * add_submit_guess_function.sql, which carries a duplicate of this formula in
+   * PL/pgSQL. If you change the curve, change both and keep these in step, or the
+   * two scoring paths will silently disagree.
+   */
+  const REFERENCE_VECTORS: Array<[km: number, score: number]> = [
+    [0, 5000],
+    [0.05, 5000],
+    [0.1, 5000],
+    [0.25, 4890],
+    [0.5, 4310],
+    [1, 2762],
+    [1.1, 2500],
+    [2, 1085],
+    [2.1, 1000],
+    [3, 531],
+    [5, 200],
+    [10, 50],
+    [20, 13],
+    [40, 3],
+  ];
+
+  it.each(REFERENCE_VECTORS)("scores %s km as %s", (km, expected) => {
+    expect(calculateScore(km)).toBe(expected);
+  });
+
+  it("no longer zeroes out a correct-neighbourhood guess", () => {
+    // The bug this curve replaced: the old ramp paid 0 from 2 km outwards, so
+    // recognising the right neighbourhood and missing by 2.1 km scored the same
+    // as guessing another continent.
+    expect(calculateScore(2.1)).toBeGreaterThan(0);
+    expect(calculateScore(2.1)).toBeGreaterThan(calculateScore(20));
+  });
+
+  it("separates informed guesses from uninformed ones", () => {
+    // The target set spans ~4.8 by 5.1 km, so an uninformed click averages about
+    // 2.6 km out. A neighbourhood-level guess must clearly beat that.
+    const neighbourhood = calculateScore(1);
+    const uninformed = calculateScore(2.6);
+    const wild = calculateScore(20);
+    expect(neighbourhood).toBeGreaterThan(uninformed * 3);
+    expect(uninformed).toBeGreaterThan(wild * 10);
+  });
+
+  it("stays inside the score range and returns whole numbers", () => {
+    for (let km = 0; km <= 200; km += 0.13) {
+      const score = calculateScore(km);
+      expect(Number.isInteger(score)).toBe(true);
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(5000);
+    }
+  });
+
+  it("decays to nothing at absurd distances without a cliff", () => {
+    // No cutoff constant is needed: the tail rounds to zero on its own. The
+    // guess map is unrestricted, so a misclick really can land on another
+    // continent.
+    expect(calculateScore(200)).toBe(0);
+    expect(calculateScore(20015)).toBe(0);
   });
 
   it("is monotonically non-increasing with distance", () => {
     let previous = Number.POSITIVE_INFINITY;
-    for (let km = 0; km <= 2.2; km += 0.05) {
+    for (let km = 0; km <= 60; km += 0.05) {
       const score = calculateScore(km);
       expect(score).toBeLessThanOrEqual(previous);
       previous = score;
     }
+  });
+
+  it("fails closed on broken input rather than awarding a perfect round", () => {
+    // A negative distance reaching the plateau branch would pay 5000.
+    expect(calculateScore(-1)).toBe(0);
+    expect(calculateScore(Number.NaN)).toBe(0);
+    expect(calculateScore(Number.POSITIVE_INFINITY)).toBe(0);
   });
 });

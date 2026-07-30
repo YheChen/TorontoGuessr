@@ -6,10 +6,19 @@ describe("tileFor", () => {
     expect(tileFor(5000)).toBe("🟩");
     expect(tileFor(4000)).toBe("🟩");
     expect(tileFor(3999)).toBe("🟦");
-    expect(tileFor(2000)).toBe("🟦");
-    expect(tileFor(1999)).toBe("🟨");
-    expect(tileFor(1)).toBe("🟨");
+    expect(tileFor(2500)).toBe("🟦");
+    expect(tileFor(2499)).toBe("🟨");
+    expect(tileFor(1000)).toBe("🟨");
+    expect(tileFor(999)).toBe("⬛");
     expect(tileFor(0)).toBe("⬛");
+  });
+
+  it("uses the same thresholds as the on-screen verdict tiers", () => {
+    // getVerdict in components/round-result-card.tsx cuts at 4000, 2500, 1000.
+    // These drifted apart once already; this pins them together.
+    expect(tileFor(4000)).not.toBe(tileFor(3999));
+    expect(tileFor(2500)).not.toBe(tileFor(2499));
+    expect(tileFor(1000)).not.toBe(tileFor(999));
   });
 });
 

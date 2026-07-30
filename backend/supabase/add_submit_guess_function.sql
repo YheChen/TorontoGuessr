@@ -9,8 +9,9 @@
 -- This is a faithful port of submitGuess (backend/src/game-store.ts):
 --   * 60s round limit + 15s grace = 75s deadline; late guesses score as a
 --     timeout. Sessions without round_started_at are exempt (legacy).
---   * haversine distance in km; linear score decay: <=0.1km -> 5000,
---     >=2km -> 0, else round(5000 * (1 - (d - 0.1) / 1.9)).
+--   * haversine distance in km, scored by public.score_for_distance_km below,
+--     which is the SQL half of a formula that also lives in
+--     backend/src/scoring-service.ts. See that function's comment.
 --   * appends the round result, advances the round, finishes the game on the
 --     last round, and baselines the next round's deadline at guess time.
 -- The FOR UPDATE lock makes it atomic, so it also removes the optimistic
@@ -23,8 +24,56 @@
 -- uses the original two-call JS path, so applying this migration alone changes
 -- nothing.
 --
--- Reference vectors (mirror the backend unit tests):
---   distance 0.0km -> 5000, 0.1km -> 5000, 1.05km -> 2500, 2.0km -> 0.
+-- The reference vectors are no longer restated in prose here. Prose goes stale
+-- silently; the assertion block at the end of this file does not.
+
+-- ---------------------------------------------------------------- the curve
+--
+-- The scoring formula, duplicated from calculateScore in
+-- backend/src/scoring-service.ts. The duplication is deliberate and cannot be
+-- removed without giving up the reason this file exists: scoring has to happen
+-- inside the row lock to stay atomic and single-round-trip.
+--
+-- Pulled out of submit_guess into its own function so there is exactly ONE
+-- copy of the arithmetic in SQL, and so the assertion block at the end of this
+-- file can execute it directly.
+--
+-- Two things must hold for the two languages to agree exactly:
+--
+--   1. Only multiplication, division, addition. No exp, log or power. Restricted
+--      to those, IEEE 754 gives bit-identical results in both languages.
+--   2. round() on ::numeric, NOT on double precision. Postgres rounds float8
+--      via rint(), which is banker's rounding: round(0.5::float8) = 0. JS
+--      Math.round is half-up: Math.round(0.5) = 1. Casting to numeric first
+--      gives half-away-from-zero, which matches JS for the non-negative values
+--      this function produces. Getting this wrong costs one point on exact
+--      halves and is invisible until someone compares boards.
+create or replace function public.score_for_distance_km(
+  p_distance_km double precision
+)
+returns integer
+language sql
+immutable
+parallel safe
+as $$
+  select case
+    -- Fail closed, exactly as the TypeScript does. A null or negative distance
+    -- must never fall through to the plateau branch and pay a perfect round.
+    when p_distance_km is null then 0
+    when p_distance_km <> p_distance_km then 0            -- NaN
+    when p_distance_km < 0 then 0
+    when p_distance_km = 'Infinity'::double precision then 0
+    when p_distance_km <= 0.1 then 5000
+    -- The division is forced into double precision so it matches the JS exactly;
+    -- only the finished value becomes numeric, purely to get JS rounding.
+    else round(
+      (
+        5000.0::double precision
+        / (1 + (p_distance_km - 0.1) * (p_distance_km - 0.1))
+      )::numeric
+    )::integer
+  end;
+$$;
 
 create or replace function public.submit_guess(
   p_session_id uuid,
@@ -93,13 +142,7 @@ begin
         power(sin(radians(v_actual_lng - p_guess_lng) / 2), 2)
       ))
     );
-    if v_distance <= 0.1 then
-      v_score := 5000;
-    elsif v_distance >= 2 then
-      v_score := 0;
-    else
-      v_score := round(5000 * (1 - (v_distance - 0.1) / 1.9));
-    end if;
+    v_score := public.score_for_distance_km(v_distance);
   end if;
 
   v_result := jsonb_build_object(
@@ -148,5 +191,59 @@ begin
     'guessRejectedLate', v_is_late and v_has_guess,
     'nextRound', v_next_round
   );
+end;
+$$;
+
+-- ------------------------------------------------- cross-language self-check
+--
+-- The same reference vectors asserted in backend/tests/scoring-service.test.ts.
+-- If the SQL copy of the curve drifts from the TypeScript one, this aborts the
+-- migration instead of installing a function that quietly scores differently.
+--
+-- This is the only executable check that the two implementations agree: there is
+-- no database integration test in CI, so without this the SQL port is verified
+-- by eye alone. It runs at apply time, which is late but is strictly better than
+-- never. Do not delete it to make the migration "cleaner".
+do $$
+declare
+  v_expected constant jsonb := jsonb_build_object(
+    '0',     5000,
+    '0.05',  5000,
+    '0.1',   5000,
+    '0.25',  4890,
+    '0.5',   4310,
+    '1',     2762,
+    '1.1',   2500,
+    '2',     1085,
+    '2.1',   1000,
+    '3',      531,
+    '5',      200,
+    '10',      50,
+    '20',      13,
+    '40',       3,
+    '200',      0
+  );
+  v_key text;
+  v_want integer;
+  v_got integer;
+begin
+  for v_key, v_want in select key, value::integer from jsonb_each_text(v_expected)
+  loop
+    v_got := public.score_for_distance_km(v_key::double precision);
+    if v_got is distinct from v_want then
+      raise exception
+        'score_for_distance_km has drifted from scoring-service.ts: % km gave %, expected %. Fix the SQL curve before applying.',
+        v_key, v_got, v_want;
+    end if;
+  end loop;
+
+  -- Fail-closed behaviour, which matters more than any single vector: broken
+  -- input must score zero, never a perfect round.
+  if public.score_for_distance_km(null) <> 0
+     or public.score_for_distance_km(-1) <> 0
+     or public.score_for_distance_km('NaN'::double precision) <> 0
+     or public.score_for_distance_km('Infinity'::double precision) <> 0 then
+    raise exception 'score_for_distance_km does not fail closed on invalid input.';
+  end if;
 end;
 $$;
