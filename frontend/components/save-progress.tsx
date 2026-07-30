@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, CloudUpload, Flame, ShieldCheck, Trophy } from "lucide-react";
+import { Check, CloudUpload, Flame, Mail, ShieldCheck, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Turnstile, isTurnstileConfigured } from "@/components/turnstile";
 import {
+  attachEmail,
   getSession,
   isAuthConfigured,
   signInAnonymously,
   type Session,
 } from "@/lib/auth-client";
 import { fetchProfile, updateDisplayName } from "@/lib/api";
+import { isLikelyEmail } from "@/lib/email";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 
@@ -64,6 +66,13 @@ export function SaveProgress({
   const [name, setName] = useState("");
   const [nameMessage, setNameMessage] = useState<string | null>(null);
   const [isSavingName, setIsSavingName] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailMessage, setEmailMessage] = useState<string | null>(null);
+  // Tracked separately from the message so a failure can be styled as one. The
+  // success case is not "done", it is "we sent you something", and conflating the
+  // two would let a rejected address read as accepted.
+  const [emailFailed, setEmailFailed] = useState(false);
+  const [isAttaching, setIsAttaching] = useState(false);
 
   // Held in refs so a parent that passes inline callbacks does not re-trigger
   // the effects below on every one of its renders.
@@ -145,6 +154,37 @@ export function SaveProgress({
     }
   };
 
+  /**
+   * Attach an email so this account can be reached from another device.
+   *
+   * The account stays anonymous until the player opens the confirmation link:
+   * updateUser does not move the address onto the user until it is verified. So
+   * this reports that a confirmation was sent and nothing stronger. Claiming the
+   * account was upgraded would be a lie, and a costly one, because the player
+   * would stop worrying about a browser whose data still holds their only key.
+   */
+  const handleAttachEmail = async () => {
+    const address = email.trim();
+    if (!address) return;
+
+    setIsAttaching(true);
+    setEmailMessage(null);
+    setEmailFailed(false);
+
+    const { error } = await attachEmail(address);
+
+    if (error) {
+      setEmailMessage(error);
+      setEmailFailed(true);
+    } else {
+      setEmailMessage(
+        `Confirmation sent to ${address}. Open the link in that email to finish adding it.`
+      );
+      setEmail("");
+    }
+    setIsAttaching(false);
+  };
+
   // Nothing to offer if the project is not wired for accounts.
   if (!isAuthConfigured || !isTurnstileConfigured) {
     return null;
@@ -213,6 +253,67 @@ export function SaveProgress({
             </p>
           )}
         </div>
+
+        {/* Reaching this account from another device. Only worth offering while
+            there is no email on it: with one, recovery already works. */}
+        {session.email ? (
+          <div className="mt-5 border-t border-border/70 pt-4">
+            <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Mail className="size-3.5 text-success" />
+              Reachable at {session.email}, so you can sign in on any device.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-5 border-t border-border/70 pt-4">
+            <label
+              htmlFor="profile-email"
+              className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+            >
+              Email (optional)
+            </label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="profile-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setEmailMessage(null);
+                  setEmailFailed(false);
+                }}
+                placeholder="you@example.com"
+                className="sm:flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleAttachEmail()}
+                disabled={isAttaching || !isLikelyEmail(email)}
+                className="rounded-xl sm:min-w-[120px]"
+              >
+                {isAttaching ? "Sending…" : "Add email"}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Right now this account lives only in this browser. Clearing your
+              data loses it. Adding an email lets you sign in anywhere, and keeps
+              the same streak and name.
+            </p>
+            {emailMessage && (
+              <p
+                className={cn(
+                  "mt-2 inline-flex items-start gap-1.5 text-sm font-medium",
+                  emailFailed ? "text-destructive" : "text-success"
+                )}
+              >
+                {!emailFailed && <Mail className="mt-0.5 size-4 shrink-0" />}
+                {emailMessage}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     );
   }
