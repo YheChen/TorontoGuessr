@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Trophy,
@@ -30,8 +30,10 @@ import {
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
 import { parseGameParams } from "@/lib/game-params";
+import { recordPlayedToday, type StreakState } from "@/lib/streak";
 import { ShareResults } from "@/components/share-results";
 import { ChallengeFriend } from "@/components/challenge-friend";
+import { StreakBadge } from "@/components/streak-badge";
 import type {
   GameMode,
   GuessLocation,
@@ -83,6 +85,10 @@ export default function Game() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [isSavingScore, setIsSavingScore] = useState(false);
+  const [streak, setStreak] = useState<StreakState | null>(null);
+  // Which session's finish has already been counted, so a re-render of the
+  // summary cannot record the same game twice.
+  const countedSessionRef = useRef<string | null>(null);
 
   const totalScore = scores.reduce((sum, round) => sum + round.score, 0);
 
@@ -128,6 +134,16 @@ export default function Game() {
   useEffect(() => {
     void startGame();
   }, []);
+
+  // Count the day once the game is actually finished, not when it starts, so a
+  // streak reflects games played through. Keyed on the session so re-rendering
+  // the summary (or replaying a challenge) cannot double count.
+  useEffect(() => {
+    if (gameState !== "summary" || !sessionId) return;
+    if (countedSessionRef.current === sessionId) return;
+    countedSessionRef.current = sessionId;
+    setStreak(recordPlayedToday());
+  }, [gameState, sessionId]);
 
   const handleMapClick = (lat: number, lng: number) => {
     if (gameState === "guessing") {
@@ -486,6 +502,9 @@ export default function Game() {
                     {savedUsername}
                   </span>
                 </p>
+                <div className="mt-5 flex justify-center">
+                  <StreakBadge streak={streak} showBest />
+                </div>
               </div>
 
               {/* Round breakdown */}

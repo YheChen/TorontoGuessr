@@ -18,6 +18,7 @@ import { Reveal } from "@/components/site/reveal";
 import { SectionHeading } from "@/components/site/section-heading";
 import { GameplayPreview } from "@/components/site/gameplay-preview";
 import { StatCard } from "@/components/site/stat-card";
+import { StreakBadge } from "@/components/streak-badge";
 import { Skyline } from "@/components/site/skyline";
 
 const FEATURES = [
@@ -67,10 +68,15 @@ export default function Home() {
       <section className="container relative pt-12 sm:pt-16 lg:pt-20">
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
           <div className="animate-fade-up">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
-              <span className="size-1.5 rounded-full bg-toronto-red" />
-              A street-guessing game for the 6ix
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+                <span className="size-1.5 rounded-full bg-toronto-red" />
+                A street-guessing game for the 6ix
+              </span>
+              {/* Client island: the streak lives in localStorage, and this page
+                  is a server component. Renders nothing without a live streak. */}
+              <StreakBadge />
+            </div>
 
             <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl xl:text-7xl">
               How well do you know{" "}
