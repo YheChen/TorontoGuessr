@@ -10,6 +10,7 @@ import {
   Flag,
   MapPin,
   Crosshair,
+  Swords,
 } from "lucide-react";
 import { GameHUD } from "@/components/game-hud";
 import { GameMap } from "@/components/game-map";
@@ -28,7 +29,9 @@ import {
   startGame as startGameRequest,
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
+import { parseGameParams } from "@/lib/game-params";
 import { ShareResults } from "@/components/share-results";
+import { ChallengeFriend } from "@/components/challenge-friend";
 import type {
   GameMode,
   GuessLocation,
@@ -73,6 +76,7 @@ export default function Game() {
   const [timeLimit, setTimeLimit] = useState(60);
   const [mode, setMode] = useState<GameMode>("classic");
   const [challengeDate, setChallengeDate] = useState<string | null>(null);
+  const [challengeCode, setChallengeCode] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
   const [savedUsername, setSavedUsername] = useState("Guest 0000");
@@ -91,19 +95,20 @@ export default function Game() {
     setSaveErrorMessage(null);
     setIsSavingScore(false);
 
-    // The mode comes from the URL (?mode=daily) so links can target it.
-    const requestedMode: GameMode =
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("mode") === "daily"
-        ? "daily"
-        : "classic";
+    // The mode comes from the URL so links can target it: ?mode=daily for the
+    // daily challenge, ?mode=challenge&c=CODE to replay a shared challenge.
+    const { mode: requestedMode, challengeCode: requestedCode } =
+      parseGameParams(
+        typeof window === "undefined" ? "" : window.location.search
+      );
 
     try {
-      const game = await startGameRequest(requestedMode);
+      const game = await startGameRequest(requestedMode, requestedCode);
       setSessionId(game.sessionId);
       setSavedUsername(game.username);
       setMode(game.mode ?? requestedMode);
       setChallengeDate(game.challengeDate ?? null);
+      setChallengeCode(game.challengeCode ?? requestedCode);
       setCurrentRound(game.currentRound);
       setTotalRounds(game.totalRounds);
       setCurrentRoundData(game.round);
@@ -304,6 +309,11 @@ export default function Game() {
                       <span className="pointer-events-auto inline-flex items-center rounded-full bg-toronto-red px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-white shadow-elevated">
                         Daily
                       </span>
+                    ) : mode === "challenge" ? (
+                      <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-toronto-gold px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-toronto-navy shadow-elevated">
+                        <Swords className="size-3.5" />
+                        Challenge
+                      </span>
                     ) : undefined
                   }
                   timerSlot={
@@ -444,10 +454,16 @@ export default function Game() {
                   aria-hidden="true"
                 />
                 <span className="inline-flex items-center gap-2 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-                  <Flag className="size-3.5" />
+                  {mode === "challenge" ? (
+                    <Swords className="size-3.5" />
+                  ) : (
+                    <Flag className="size-3.5" />
+                  )}
                   {mode === "daily" && challengeDate
                     ? `Daily challenge · ${challengeDate}`
-                    : "Game complete"}
+                    : mode === "challenge" && challengeCode
+                      ? `Challenge · ${challengeCode}`
+                      : "Game complete"}
                 </span>
                 <p className="mt-6 text-sm text-muted-foreground">
                   Final score
@@ -579,6 +595,13 @@ export default function Game() {
                   mode={mode}
                   challengeDate={challengeDate}
                 />
+                {sessionId && (
+                  <ChallengeFriend
+                    sessionId={sessionId}
+                    totalScore={totalScore}
+                    maxScore={maxTotal}
+                  />
+                )}
                 <Button
                   asChild
                   size="xl"

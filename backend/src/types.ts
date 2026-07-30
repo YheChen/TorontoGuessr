@@ -25,7 +25,17 @@ export interface RoundResult {
 
 export type GameStatus = "in_progress" | "finished";
 
-export type GameMode = "classic" | "daily";
+export type GameMode = "classic" | "daily" | "challenge";
+
+export const GAME_MODES = ["classic", "daily", "challenge"] as const;
+
+/** Raw `challenges` row shape as returned by PostgREST. */
+export interface ChallengeRecord {
+  code: string;
+  rounds: GameRound[] | null;
+  source_session_id: string | null;
+  created_at: string;
+}
 
 /** Camel-cased session model used inside the backend. */
 export interface GameSession {
