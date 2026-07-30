@@ -310,33 +310,23 @@ export async function createGameSession(
   return mapSessionRecord(record);
 }
 
+/**
+ * The current round as the browser may see it: pano id and camera only, never
+ * the answer coordinates.
+ *
+ * Reads only. It used to accept a touchDeadline option that rewrote
+ * round_started_at to now, so that serving a round restarted its clock. That was
+ * an unbounded write on an unauthenticated route: repeated calls kept moving the
+ * deadline and the 60s + 15s timeout in submitGuess could never fire. The clock
+ * is baselined at insert for the first round and at guess time for every round
+ * after, which is sufficient.
+ */
 export async function getRoundForClient(
-  sessionId: string,
-  { touchDeadline = false }: { touchDeadline?: boolean } = {}
+  sessionId: string
 ): Promise<RoundPayload | null> {
   const session = await requireGameSession(sessionId);
   if (session.status !== "in_progress") {
     return null;
-  }
-
-  // The player is being served this round now; restart its deadline clock.
-  if (touchDeadline && sessionSchemaExtended) {
-    try {
-      await updateSingleRow<GameSessionRecord>(
-        GAME_SESSIONS_TABLE,
-        { round_started_at: new Date().toISOString() },
-        {
-          filters: { id: sessionId, status: "in_progress" },
-          columns: "id",
-        }
-      );
-    } catch (error) {
-      if (isMissingColumnError(error)) {
-        sessionSchemaExtended = false;
-      } else {
-        throw error;
-      }
-    }
   }
 
   return buildRoundPayload(session);

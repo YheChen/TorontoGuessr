@@ -26,6 +26,23 @@ export type AuthCallback =
  * server's own description, which is usually readable, and then to a generic
  * line so a player never sees an empty error.
  */
+/**
+ * Looks up a reworded message without inheriting from Object.prototype.
+ *
+ * The keys come straight from a URL, so a plain object literal was indexable with
+ * `__proto__`, `constructor` or `toString`: `?error_code=__proto__` resolved to
+ * Object.prototype, which is truthy, typed `string`, and is not one. It reached
+ * ErrorCard as a React child and threw. The typeof guard is the belt to
+ * hasOwn's braces.
+ */
+function friendlyError(code: string | undefined): string | undefined {
+  if (!code || !Object.hasOwn(FRIENDLY_ERRORS, code)) {
+    return undefined;
+  }
+  const message = FRIENDLY_ERRORS[code];
+  return typeof message === "string" ? message : undefined;
+}
+
 const FRIENDLY_ERRORS: Record<string, string> = {
   otp_expired: "That sign-in link has expired. Request a new one and it will work.",
   access_denied: "That sign-in link is no longer valid. Request a new one.",
@@ -73,9 +90,9 @@ export function readAuthCallback(search: string, hash: string): AuthCallback {
     return {
       kind: "error",
       message:
-        (code ? FRIENDLY_ERRORS[code] : undefined) ??
+        friendlyError(code) ??
         description ??
-        (error ? FRIENDLY_ERRORS[error] : undefined) ??
+        friendlyError(error) ??
         GENERIC_ERROR,
     };
   }
