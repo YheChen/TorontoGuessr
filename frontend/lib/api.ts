@@ -1,4 +1,5 @@
 import type {
+  CreateChallengeResponse,
   DeleteRejectedLocationsResponse,
   GameMode,
   GameStatsResponse,
@@ -49,10 +50,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export function startGame(mode: GameMode = "classic") {
+export function startGame(
+  mode: GameMode = "classic",
+  challengeCode?: string | null
+) {
   return request<StartGameResponse>("/games/start", {
     method: "POST",
-    body: JSON.stringify({ mode }),
+    body: JSON.stringify(
+      mode === "challenge" ? { mode, challengeCode } : { mode }
+    ),
+  });
+}
+
+/** Snapshot this game's rounds behind a shareable code. */
+export function createChallenge(sessionId: string) {
+  return request<CreateChallengeResponse>(`/games/${sessionId}/challenge`, {
+    method: "POST",
   });
 }
 

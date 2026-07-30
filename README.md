@@ -118,6 +118,8 @@ Gameplay, scoring, leaderboards, statistics, authentication, the admin review wo
 
    Also run [backend/supabase/add_game_modes_and_deadlines.sql](backend/supabase/add_game_modes_and_deadlines.sql). It adds the daily-challenge mode columns and the `round_started_at` timestamp used to enforce round deadlines server-side. Until it is applied, deadlines are skipped and daily-challenge games are recorded as classic.
 
+   Also run [backend/supabase/add_challenge_links.sql](backend/supabase/add_challenge_links.sql). It adds the `challenges` table backing shareable challenge links, where a snapshot of one game's five rounds is addressed by a short code so a friend can replay exactly those locations. Apply it after (or together with) the game-modes migration above: challenge games are marked by `mode = 'challenge'`, which is how they are kept off the global leaderboard. Until this table exists, the challenge endpoints report the feature as unavailable and the rest of the game is unaffected.
+
 5. Fill in `backend/.env` using [backend/.env.example](backend/.env.example):
 
    ```env

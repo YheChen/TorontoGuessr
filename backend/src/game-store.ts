@@ -597,32 +597,51 @@ export async function getLeaderboard({
     if (since) {
       filters.completed_at = { op: "gte", value: since };
     }
+    // Shared-challenge games replay a known set of rounds and can be retried
+    // freely, so they are kept off the global board. Only filter when the mode
+    // column exists; the query is retried without it below otherwise.
+    if (sessionSchemaExtended) {
+      filters.mode = { op: "neq", value: "challenge" };
+    }
   }
 
-  let records: LeaderboardRecord[] = [];
-  let total = 0;
-  try {
-    [records, total] = await Promise.all([
+  const runQuery = (activeFilters: Filters) =>
+    Promise.all([
       selectRows<LeaderboardRecord>(GAME_SESSIONS_TABLE, {
         columns: "id,username,total_score,rounds_played,completed_at",
-        filters,
+        filters: activeFilters,
         order: "total_score.desc,completed_at.asc",
         limit,
         offset,
       }),
-      countRows(GAME_SESSIONS_TABLE, { filters }),
+      countRows(GAME_SESSIONS_TABLE, { filters: activeFilters }),
     ]);
+
+  let records: LeaderboardRecord[] = [];
+  let total = 0;
+  try {
+    [records, total] = await runQuery(filters);
   } catch (error) {
-    // Challenge board before the mode columns exist: present an empty board
-    // rather than failing the page. (PostgREST reports the missing `mode`
-    // column obliquely, parsing it as its ordered-set aggregate function.)
-    if (board !== "challenge") {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (board === "challenge") {
+      // Challenge board before the mode columns exist: present an empty board
+      // rather than failing the page. (PostgREST reports the missing `mode`
+      // column obliquely, parsing it as its ordered-set aggregate function.)
+      console.warn(
+        `[game-store] challenge leaderboard unavailable, returning empty board: ${message}`
+      );
+    } else if ("mode" in filters) {
+      // The mode exclusion is a refinement, never a reason to fail the main
+      // leaderboard: drop it and serve the board unfiltered.
+      const { mode: _excludedMode, ...filtersWithoutMode } = filters;
+      console.warn(
+        `[game-store] could not exclude challenge games from the global leaderboard, serving unfiltered: ${message}`
+      );
+      [records, total] = await runQuery(filtersWithoutMode);
+    } else {
       throw error;
     }
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(
-      `[game-store] challenge leaderboard unavailable, returning empty board: ${message}`
-    );
   }
 
   const entries = records.map((record) => ({

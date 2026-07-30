@@ -10,7 +10,7 @@ export interface RoundPayload {
   zoom: number;
 }
 
-export type GameMode = "classic" | "daily";
+export type GameMode = "classic" | "daily" | "challenge";
 
 export interface StartGameResponse {
   sessionId: string;
@@ -22,6 +22,13 @@ export interface StartGameResponse {
   /** Present on newer backends. */
   mode?: GameMode;
   challengeDate?: string | null;
+  /** The shared challenge this game is replaying, when mode is "challenge". */
+  challengeCode?: string | null;
+}
+
+export interface CreateChallengeResponse {
+  code: string;
+  totalRounds: number;
 }
 
 export interface GuessResponse {

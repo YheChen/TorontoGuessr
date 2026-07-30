@@ -28,8 +28,13 @@ import {
   sendJson,
   setCorsHeaders,
 } from "./http-utils.js";
-import { LEADERBOARD_PERIODS } from "./types.js";
+import { GAME_MODES, LEADERBOARD_PERIODS, type GameRound } from "./types.js";
 import { sanitizeUsername } from "./username-utils.js";
+import { normalizeChallengeCode } from "./challenge-code.js";
+import {
+  createChallengeFromSession,
+  getChallengeRounds,
+} from "./challenge-store.js";
 import {
   createTimings,
   enterRequestTimings,
@@ -50,7 +55,9 @@ const usernameSchema = z.object({
   username: z.string().optional(),
 });
 const startGameSchema = z.object({
-  mode: z.enum(["classic", "daily"]).default("classic"),
+  mode: z.enum(GAME_MODES).default("classic"),
+  /** Required when mode is "challenge"; validated by normalizeChallengeCode. */
+  challengeCode: z.string().max(32).optional(),
 });
 const leaderboardPeriodSchema = z.enum(LEADERBOARD_PERIODS);
 const leaderboardQuerySchema = z.object({
@@ -177,11 +184,37 @@ export async function routeRequest(
         return;
       }
 
-      const { mode } = startGameSchema.parse(await readBody(request));
-      const challengeDate = mode === "daily" ? getTorontoDateKey() : null;
-      // Daily challenge: everyone gets the same rounds for a given date.
-      const seed = challengeDate ? seedFromString(challengeDate) : null;
-      const rounds = await selectGameRounds(5, seed);
+      const { mode, challengeCode: requestedCode } = startGameSchema.parse(
+        await readBody(request)
+      );
+
+      let rounds: GameRound[];
+      let challengeDate: string | null = null;
+      let challengeCode: string | null = null;
+
+      if (mode === "challenge") {
+        // Shared challenge: replay the snapshotted rounds so every player who
+        // opens the link sees exactly the same five locations.
+        challengeCode = normalizeChallengeCode(requestedCode);
+        if (!challengeCode) {
+          throw createHttpError(400, "That challenge code is not valid.");
+        }
+
+        const snapshot = await getChallengeRounds(challengeCode);
+        if (!snapshot) {
+          throw createHttpError(
+            404,
+            "That challenge could not be found. Check the link and try again."
+          );
+        }
+        rounds = snapshot;
+      } else {
+        challengeDate = mode === "daily" ? getTorontoDateKey() : null;
+        // Daily challenge: everyone gets the same rounds for a given date.
+        const seed = challengeDate ? seedFromString(challengeDate) : null;
+        rounds = await selectGameRounds(5, seed);
+      }
+
       const session = await createGameSession(rounds, { mode, challengeDate });
       const payload = await getRoundForClient(session.id);
       if (!payload) {
@@ -193,6 +226,7 @@ export async function routeRequest(
         username: session.username,
         mode: session.mode,
         challengeDate: session.challengeDate,
+        challengeCode,
         ...payload,
       });
       return;
@@ -223,6 +257,31 @@ export async function routeRequest(
       }
 
       sendJson(response, 200, nextRound);
+      return;
+    }
+
+    const challengeParams = matchRoute(pathname, "/games/:sessionId/challenge");
+    if (request.method === "POST" && challengeParams?.sessionId) {
+      // Each call writes a row, so cap it per IP like new games are capped.
+      const rateLimit = checkRateLimit(
+        `challenge-create:${clientIp(request)}`,
+        { limit: 10, windowMs: 60_000 }
+      );
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(
+          response,
+          429,
+          "Too many challenge links from this address. Please wait a moment and try again."
+        );
+        return;
+      }
+
+      sendJson(
+        response,
+        200,
+        await createChallengeFromSession(challengeParams.sessionId)
+      );
       return;
     }
 
