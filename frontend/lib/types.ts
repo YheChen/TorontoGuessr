@@ -53,12 +53,26 @@ export interface NextRoundResponse {
   timeLimit: number;
 }
 
+/**
+ * One round as it appears in the end-of-game summary.
+ *
+ * Narrower than GuessResponse on purpose: the summary route is reachable by
+ * session id alone and session ids are public, so the backend no longer returns
+ * actualLocation or guessLocation there. A player still gets its own round's
+ * actualLocation from its own guess response, which is where it belongs.
+ */
+export interface RoundSummary {
+  roundNumber: number;
+  score: number;
+  distance: number | null;
+}
+
 export interface SummaryResponse {
   gameFinished: true;
   summary: {
     username: string;
     totalScore: number;
-    rounds: GuessResponse[];
+    rounds: RoundSummary[];
   };
 }
 
