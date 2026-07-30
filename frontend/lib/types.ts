@@ -89,6 +89,54 @@ export interface LeaderboardResponse {
   hasNextPage: boolean;
 }
 
+export type LobbyStatus = "waiting" | "in_progress" | "finished";
+
+export interface LobbyPlayerState {
+  playerId: string;
+  displayName: string;
+  totalScore: number;
+  isConnected: boolean;
+  /** Who has locked in a guess. Never says where, until the reveal. */
+  hasGuessed: boolean;
+  /** Present only once the round is revealed. */
+  roundScore?: number;
+  roundDistance?: number | null;
+  guessLocation?: GuessLocation | null;
+}
+
+export interface LobbyState {
+  joinCode: string;
+  status: LobbyStatus;
+  hostPlayerId: string;
+  currentRound: number;
+  totalRounds: number;
+  roundRevealed: boolean;
+  timeLimit: number;
+  roundDeadlineAt: string | null;
+  revealDeadlineAt: string | null;
+  /** Lets the client run a countdown without trusting its own clock. */
+  serverTime: string;
+  round: RoundPayload | null;
+  actualLocation: GuessLocation | null;
+  you: {
+    playerId: string;
+    isHost: boolean;
+    hasGuessed: boolean;
+  } | null;
+  players: LobbyPlayerState[];
+}
+
+export interface CreateLobbyResponse {
+  joinCode: string;
+  playerId: string;
+  playerToken: string;
+}
+
+export interface JoinLobbyResponse {
+  playerId: string;
+  playerToken: string;
+}
+
 export type LocationReviewStatus = "pending" | "rejected" | "accepted";
 
 export interface LocationReviewEntry {

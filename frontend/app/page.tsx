@@ -11,6 +11,7 @@ import {
   Building2,
   CalendarDays,
   Check,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/site/reveal";
@@ -97,6 +98,17 @@ export default function Home() {
                 <Link href="/game?mode=daily">
                   <CalendarDays className="size-5" />
                   Daily challenge
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="xl"
+                variant="outline"
+                className="rounded-2xl"
+              >
+                <Link href="/lobby">
+                  <Users className="size-5" />
+                  Play with friends
                 </Link>
               </Button>
               <Button

@@ -1,10 +1,50 @@
 import { describe, expect, it } from "vitest";
+import type { ServerResponse } from "node:http";
 import {
   createHttpError,
   isHttpError,
   matchRoute,
   normalizePathname,
+  setCorsHeaders,
 } from "../src/http-utils.js";
+
+describe("setCorsHeaders", () => {
+  function capture(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    const response = {
+      setHeader: (name: string, value: string) => {
+        headers[name] = value;
+      },
+    } as unknown as ServerResponse;
+    setCorsHeaders(response);
+    return headers;
+  }
+
+  it("allows every custom header the app actually sends", () => {
+    // A header missing here fails the browser preflight, which curl never
+    // exercises: x-player-token authenticates lobby players.
+    const allowed = capture()["Access-Control-Allow-Headers"] ?? "";
+    for (const header of [
+      "Content-Type",
+      "X-Admin-Token",
+      "X-Player-Token",
+      "Authorization",
+    ]) {
+      expect(allowed).toContain(header);
+    }
+  });
+
+  it("allows the methods the routes use", () => {
+    const methods = capture()["Access-Control-Allow-Methods"] ?? "";
+    for (const method of ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+      expect(methods).toContain(method);
+    }
+  });
+
+  it("caches the preflight", () => {
+    expect(capture()["Access-Control-Max-Age"]).toBe("86400");
+  });
+});
 
 describe("matchRoute", () => {
   it("extracts a single named parameter", () => {
