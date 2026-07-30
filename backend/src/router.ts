@@ -50,6 +50,7 @@ import {
   logRequestTiming,
 } from "./observability.js";
 import { checkRateLimit, clientIp } from "./rate-limit.js";
+import { requireAdminToken } from "./admin-auth.js";
 
 const guessSchema = z.object({
   guessLocation: z
@@ -117,29 +118,6 @@ const gameStatsQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(3650).optional(),
   timeZone: z.string().trim().min(1).max(100).optional(),
 });
-
-function requireAdminToken(request: IncomingMessage): void {
-  const expectedToken = process.env.ADMIN_REVIEW_TOKEN?.trim();
-
-  if (!expectedToken) {
-    throw createHttpError(500, "ADMIN_REVIEW_TOKEN is not configured.");
-  }
-
-  const authHeader = request.headers.authorization;
-  const bearerToken =
-    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-      ? authHeader.slice("Bearer ".length).trim()
-      : null;
-  const headerToken = request.headers["x-admin-token"];
-  const providedToken =
-    typeof headerToken === "string" && headerToken.trim()
-      ? headerToken.trim()
-      : bearerToken;
-
-  if (providedToken !== expectedToken) {
-    throw createHttpError(401, "Unauthorized.");
-  }
-}
 
 export async function routeRequest(
   request: IncomingMessage,
