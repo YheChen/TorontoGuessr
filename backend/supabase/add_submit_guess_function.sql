@@ -60,7 +60,13 @@ as $$
     -- Fail closed, exactly as the TypeScript does. A null or negative distance
     -- must never fall through to the plateau branch and pay a perfect round.
     when p_distance_km is null then 0
-    when p_distance_km <> p_distance_km then 0            -- NaN
+    -- NaN, and it MUST be tested with = rather than the usual `x <> x` trick.
+    -- Postgres deliberately breaks IEEE here so floats can be sorted and
+    -- indexed: NaN = NaN is TRUE and NaN sorts above every other value. So
+    -- `x <> x` is false for NaN, it would fall through every branch below
+    -- (NaN < 0 is false, NaN <= 0.1 is false), reach the division, and produce
+    -- NaN, which ::numeric then refuses with "cannot convert NaN to integer".
+    when p_distance_km = 'NaN'::double precision then 0
     when p_distance_km < 0 then 0
     when p_distance_km = 'Infinity'::double precision then 0
     when p_distance_km <= 0.1 then 5000

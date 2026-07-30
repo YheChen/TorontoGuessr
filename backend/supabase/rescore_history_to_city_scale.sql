@@ -56,7 +56,13 @@ as $$
     -- must never fall through to the plateau branch and pay a perfect round.
     -- Null is the common case here: a timeout or a late guess stores no distance.
     when p_distance_km is null then 0
-    when p_distance_km <> p_distance_km then 0            -- NaN
+    -- NaN, and it MUST be tested with = rather than the usual `x <> x` trick.
+    -- Postgres deliberately breaks IEEE here so floats can be sorted and
+    -- indexed: NaN = NaN is TRUE and NaN sorts above every other value. So
+    -- `x <> x` is false for NaN, it would fall through every branch below
+    -- (NaN < 0 is false, NaN <= 0.1 is false), reach the division, and produce
+    -- NaN, which ::numeric then refuses with "cannot convert NaN to integer".
+    when p_distance_km = 'NaN'::double precision then 0
     when p_distance_km < 0 then 0
     when p_distance_km = 'Infinity'::double precision then 0
     when p_distance_km <= 0.1 then 5000
@@ -69,12 +75,18 @@ as $$
   end;
 $$;
 
--- ------------------------------------------------- check the curve BEFORE writing
+-- ------------------------------------------------------------------ the rescore
 --
--- Same reference vectors as backend/tests/scoring-service.test.ts. If the curve
--- in this file has drifted from the application's, this aborts before a single
--- row is touched. Rescoring 3220 sessions with a wrong curve would be far harder
--- to undo than to prevent.
+-- ONE statement on purpose: verify the curve, rescore, verify the result. A DO
+-- block is a single statement, so any raise inside it rolls back everything it
+-- did, with no dependence on how the client handles errors.
+--
+-- That last part is not theoretical. This was originally two blocks, checking the
+-- curve first and rescoring second, and testing it against a real Postgres showed
+-- the guarantee was hollow: psql without ON_ERROR_STOP CONTINUES past a failed
+-- statement, so a deliberately drifted curve raised "Nothing was rescored" and
+-- then the next block rescored 3220 sessions with the wrong curve anyway. Merging
+-- them makes the safety structural rather than a property of the client.
 do $$
 declare
   v_expected constant jsonb := jsonb_build_object(
@@ -85,30 +97,6 @@ declare
   v_key text;
   v_want integer;
   v_got integer;
-begin
-  for v_key, v_want in select key, value::integer from jsonb_each_text(v_expected)
-  loop
-    v_got := public.score_for_distance_km(v_key::double precision);
-    if v_got is distinct from v_want then
-      raise exception
-        'score_for_distance_km disagrees with scoring-service.ts: % km gave %, expected %. Nothing was rescored.',
-        v_key, v_got, v_want;
-    end if;
-  end loop;
-
-  if public.score_for_distance_km(null) <> 0
-     or public.score_for_distance_km(-1) <> 0
-     or public.score_for_distance_km('NaN'::double precision) <> 0 then
-    raise exception 'score_for_distance_km does not fail closed. Nothing was rescored.';
-  end if;
-
-  raise notice 'curve verified against 15 reference vectors';
-end;
-$$;
-
--- ------------------------------------------------------------------ the rescore
-do $$
-declare
   v_sessions_before bigint;
   v_score_before bigint;
   v_score_after bigint;
@@ -120,6 +108,30 @@ declare
   v_bad_totals bigint;
   v_out_of_range bigint;
 begin
+  -- Curve check FIRST, in the same statement as the write. Same reference vectors
+  -- as backend/tests/scoring-service.test.ts. Rescoring every row with a wrong
+  -- curve would be far harder to undo than to prevent.
+  for v_key, v_want in select key, value::integer from jsonb_each_text(v_expected)
+  loop
+    v_got := public.score_for_distance_km(v_key::double precision);
+    if v_got is distinct from v_want then
+      raise exception
+        'score_for_distance_km disagrees with scoring-service.ts: % km gave %, expected %. Nothing was rescored.',
+        v_key, v_got, v_want;
+    end if;
+  end loop;
+
+  -- Fail-closed behaviour. NaN must be tested with = here too, for the reason
+  -- documented on the function above.
+  if public.score_for_distance_km(null) <> 0
+     or public.score_for_distance_km(-1) <> 0
+     or public.score_for_distance_km('NaN'::double precision) <> 0
+     or public.score_for_distance_km('Infinity'::double precision) <> 0 then
+    raise exception 'score_for_distance_km does not fail closed. Nothing was rescored.';
+  end if;
+
+  raise notice 'curve verified against 15 reference vectors';
+
   -- A session whose results are not a JSON array cannot be rescored. There were
   -- none when this was written; if that changes, say so loudly rather than
   -- skipping rows in silence.
