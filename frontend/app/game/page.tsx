@@ -34,6 +34,7 @@ import { recordPlayedToday, type StreakState } from "@/lib/streak";
 import { ShareResults } from "@/components/share-results";
 import { ChallengeFriend } from "@/components/challenge-friend";
 import { StreakBadge } from "@/components/streak-badge";
+import { SaveProgress } from "@/components/save-progress";
 import type {
   GameMode,
   GuessLocation,
@@ -552,6 +553,9 @@ export default function Game() {
                   })}
                 </ul>
               </div>
+
+              {/* Offer to keep the streak beyond this browser */}
+              <SaveProgress />
 
               {/* Save username */}
               <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-150 sm:p-7">

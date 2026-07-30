@@ -1,3 +1,5 @@
+import { getSession, refreshSession } from "@/lib/auth-client";
+
 import type {
   CreateChallengeResponse,
   CreateLobbyResponse,
@@ -10,6 +12,7 @@ import type {
   LeaderboardPeriod,
   LeaderboardResponse,
   LobbyState,
+  Profile,
   LocationReviewQueueResponse,
   NextRoundResponse,
   SaveScoreResponse,
@@ -32,14 +35,40 @@ function getApiBaseUrl() {
     : rawApiBaseUrl;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+async function send(
+  path: string,
+  init: RequestInit | undefined,
+  accessToken: string | null
+): Promise<Response> {
+  return fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(init?.headers ?? {}),
     },
-    ...init,
   });
+}
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  { authenticated = false }: { authenticated?: boolean } = {}
+): Promise<T> {
+  // Only authenticated calls pay the cost of reading the session.
+  let accessToken = authenticated ? (await getSession())?.accessToken ?? null : null;
+  let response = await send(path, init, accessToken);
+
+  // A token can expire mid-session. The backend answers 401 rather than
+  // silently treating the request as anonymous, so refresh once and retry
+  // instead of surfacing a spurious error.
+  if (response.status === 401 && accessToken) {
+    const refreshed = await refreshSession();
+    if (refreshed?.accessToken && refreshed.accessToken !== accessToken) {
+      accessToken = refreshed.accessToken;
+      response = await send(path, init, accessToken);
+    }
+  }
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -171,6 +200,18 @@ export function leaveLobby(joinCode: string, playerToken: string) {
       method: "POST",
       headers: getPlayerHeaders(playerToken),
     }
+  );
+}
+
+export function fetchProfile() {
+  return request<{ profile: Profile }>("/me", undefined, { authenticated: true });
+}
+
+export function updateDisplayName(displayName: string) {
+  return request<{ profile: Profile }>(
+    "/me",
+    { method: "PATCH", body: JSON.stringify({ displayName }) },
+    { authenticated: true }
   );
 }
 
