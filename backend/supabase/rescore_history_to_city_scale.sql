@@ -13,10 +13,10 @@
 -- SAFE TO RUN TWICE. The recomputation reads only `distance`, which never
 -- changes, so a second run is a no-op and reports 0 rows updated.
 --
--- SELF-ROLLING-BACK. The reference-vector check runs before any write. The
--- integrity check runs inside the same DO block as the UPDATE, and a DO block is
--- a single statement, so raising there undoes the update rather than leaving the
--- table half-converted.
+-- SELF-ROLLING-BACK. The curve check, the UPDATE and the integrity checks all
+-- live in ONE DO block. A DO block is a single statement, so a raise anywhere in
+-- it undoes everything it did, and that holds regardless of how the client
+-- handles errors. See the note above the block for why that distinction matters.
 --
 -- EXPECTED RESULT, measured independently in JS against the live data on
 -- 2026-07-30 before this was written. If the notices below disagree with these,
