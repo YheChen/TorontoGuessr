@@ -7,6 +7,7 @@ import { Menu, X, Trophy, Info, Play, BarChart3, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/site/brand-mark";
+import { AccountMenu } from "@/components/site/account-menu";
 
 const NAV_LINKS = [
   { href: "/lobby", label: "Multiplayer", icon: Users },
@@ -82,6 +83,10 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Renders nothing until the stored session has been read, so an
+              already-signed-in player never sees "Sign in" flash first. */}
+          <AccountMenu />
+
           <Button
             asChild
             size="sm"
