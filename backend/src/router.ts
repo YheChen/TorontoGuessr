@@ -51,7 +51,7 @@ import {
 } from "./observability.js";
 import { checkRateLimit, clientIp } from "./rate-limit.js";
 import { requireAdminToken } from "./admin-auth.js";
-import { requireUser } from "./auth.js";
+import { optionalUser, requireUser } from "./auth.js";
 import { getOrCreateProfile, setDisplayName } from "./profile-store.js";
 
 const guessSchema = z.object({
@@ -258,10 +258,16 @@ export async function routeRequest(
 
     const guessParams = matchRoute(pathname, "/games/:sessionId/guess");
     if (request.method === "POST" && guessParams?.sessionId) {
+      // optionalUser, never requireUser: a guest sends no Authorization header,
+      // gets null, and plays exactly as before. Resolved before anything is read
+      // or written, so the 401 it raises for an expired token leaves no state
+      // behind and the client's refresh-and-retry is safe to repeat.
+      const user = await optionalUser(request);
       const parsedBody = guessSchema.parse(await readBody(request));
       const result = await submitGuess(
         guessParams.sessionId,
-        parsedBody.guessLocation ?? null
+        parsedBody.guessLocation ?? null,
+        { userId: user?.userId ?? null }
       );
       sendJson(response, 200, result);
       return;

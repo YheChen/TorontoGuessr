@@ -376,9 +376,52 @@ const submitGuessRpcSchema = z.object({
     .nullable(),
 });
 
+/**
+ * File a just-finished game under the account that played it.
+ *
+ * Called ONLY by the request that performed the in_progress to finished
+ * transition, and that restriction is the entire security model. Session ids of
+ * finished games are PUBLIC: getLeaderboard returns them as entry.id. So any code
+ * path that could attribute an already-finished session would let a signed-in
+ * player claim a stranger's score straight off the leaderboard. Requiring that
+ * the caller be the one who just finished it means they had to actually play it.
+ *
+ * `user_id: null` in the filter makes the claim once-only at the database level,
+ * so even a replayed request cannot move a game between accounts.
+ *
+ * Must never throw. A scored guess is the product; attribution is bookkeeping.
+ * The RPC caller below also sits inside a try that falls back to the JS path on
+ * any error, and re-running a guess that already finished the game would fail it
+ * outright, so swallowing here is load-bearing rather than lazy.
+ */
+async function attributeFinishedGame(
+  sessionId: string,
+  userId: string
+): Promise<void> {
+  try {
+    await updateSingleRow<{ id: string }>(
+      GAME_SESSIONS_TABLE,
+      { user_id: userId },
+      {
+        filters: { id: sessionId, status: "finished", user_id: null },
+        columns: "id",
+      }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[game-store] could not attribute session ${sessionId} to an account ` +
+        `(apply link_game_sessions_to_accounts.sql if user_id is missing): ${message}`
+    );
+  }
+}
+
 export async function submitGuess(
   sessionId: string,
-  guessLocation: LatLng | null = null
+  guessLocation: LatLng | null = null,
+  // An options object rather than a third positional, so two nullable arguments
+  // cannot be transposed at a call site.
+  { userId = null }: { userId?: string | null } = {}
 ) {
   if (guessRpcEnabled) {
     try {
@@ -388,6 +431,11 @@ export async function submitGuess(
         p_guess_lng: guessLocation?.lng ?? null,
       });
       const parsed = submitGuessRpcSchema.parse(payload);
+      // The RPC performed the transition, so this request is the one allowed to
+      // claim the game.
+      if (parsed.gameFinished && userId) {
+        await attributeFinishedGame(sessionId, userId);
+      }
       return {
         ...parsed.result,
         totalScore: parsed.totalScore,
@@ -496,6 +544,12 @@ export async function submitGuess(
     throw new Error(
       "Game session changed before your guess was recorded. Please try again."
     );
+  }
+
+  // The optimistic filter above matched, so this request is the one that just
+  // finished the game and is therefore the only one entitled to claim it.
+  if (gameFinished && userId) {
+    await attributeFinishedGame(sessionId, userId);
   }
 
   return {
