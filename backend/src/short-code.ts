@@ -5,12 +5,12 @@ import { randomInt } from "node:crypto";
  * typed, handwritten, or read aloud. 32^6 is about 1.07 billion codes.
  */
 const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-export const CHALLENGE_CODE_LENGTH = 6;
+export const SHORT_CODE_LENGTH = 6;
 
-/** A fresh random challenge code in canonical (uppercase) form. */
-export function generateChallengeCode(): string {
+/** A fresh random share code in canonical (uppercase) form. */
+export function generateShortCode(): string {
   let code = "";
-  for (let index = 0; index < CHALLENGE_CODE_LENGTH; index += 1) {
+  for (let index = 0; index < SHORT_CODE_LENGTH; index += 1) {
     // randomInt is uniform, unlike Math.random scaled to the alphabet length.
     code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   }
@@ -25,7 +25,7 @@ export function generateChallengeCode(): string {
  * hyphens, and folds the characters the alphabet omits onto their look-alikes
  * (I and L to 1, O to 0) so a misread code still resolves.
  */
-export function normalizeChallengeCode(input: unknown): string | null {
+export function normalizeShortCode(input: unknown): string | null {
   if (typeof input !== "string") {
     return null;
   }
@@ -36,7 +36,7 @@ export function normalizeChallengeCode(input: unknown): string | null {
     .replace(/[IL]/g, "1")
     .replace(/O/g, "0");
 
-  if (candidate.length !== CHALLENGE_CODE_LENGTH) {
+  if (candidate.length !== SHORT_CODE_LENGTH) {
     return null;
   }
 

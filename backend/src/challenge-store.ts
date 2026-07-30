@@ -1,5 +1,5 @@
 import { insertRow, selectSingleRow } from "./supabase.js";
-import { generateChallengeCode } from "./challenge-code.js";
+import { generateShortCode } from "./short-code.js";
 import { createHttpError } from "./http-utils.js";
 import type { ChallengeRecord, GameRound, GameSessionRecord } from "./types.js";
 
@@ -78,7 +78,7 @@ export async function createChallengeFromSession(
   }
 
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
-    const code = generateChallengeCode();
+    const code = generateShortCode();
     try {
       const record = await insertRow<ChallengeRecord>(
         CHALLENGES_TABLE,
