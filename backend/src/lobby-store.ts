@@ -16,6 +16,7 @@ import {
   REVEAL_DURATION_SECONDS,
   type LobbyTimingState,
 } from "./lobby-settle.js";
+import { broadcastLobbyChange } from "./realtime.js";
 import type {
   LatLng,
   LobbyPlayerRecord,
@@ -265,6 +266,8 @@ export async function joinLobby(
     )
   );
 
+  // Let the waiting room show the new player without waiting for a poll.
+  await broadcastLobbyChange(lobby.join_code, "join");
   return { playerId, playerToken };
 }
 
@@ -318,6 +321,7 @@ export async function startLobby(
     return getLobbyState(joinCode, playerToken);
   }
 
+  await broadcastLobbyChange(joinCode, "start");
   return buildStatePayload(started, players, viewer);
 }
 
@@ -383,6 +387,9 @@ export async function submitLobbyGuess(
   // Re-read and settle again: this guess may have completed the round.
   const refreshedPlayers = await fetchPlayers(settled.lobby.id);
   const after = await settleLobby(settled.lobby, refreshedPlayers);
+
+  // Others should see "locked in" (and any resulting reveal) immediately.
+  await broadcastLobbyChange(joinCode, "guess");
   return buildStatePayload(
     after.lobby,
     after.players,
@@ -436,6 +443,8 @@ export async function leaveLobby(
     )
   );
 
+  // Leaving can complete a round, since absent players stop being awaited.
+  await broadcastLobbyChange(joinCode, "leave");
   return { left: true };
 }
 
@@ -490,8 +499,15 @@ async function settleLobby(
     revealDurationSeconds: REVEAL_DURATION_SECONDS,
   });
 
+  if (steps.length === 0) {
+    return { lobby, players };
+  }
+
   let currentLobby = lobby;
   let currentPlayers = players;
+  // A settle can be triggered by any client's poll, so when it transitions the
+  // lobby every other client needs to hear about it, not just this caller.
+  let transitioned = false;
 
   for (const step of steps) {
     if (step.type === "reveal") {
@@ -554,6 +570,7 @@ async function settleLobby(
         };
       }
       currentLobby = revealed;
+      transitioned = true;
       continue;
     }
 
@@ -586,6 +603,7 @@ async function settleLobby(
         };
       }
       currentLobby = advanced;
+      transitioned = true;
       continue;
     }
 
@@ -601,7 +619,12 @@ async function settleLobby(
     );
     if (finished) {
       currentLobby = finished;
+      transitioned = true;
     }
+  }
+
+  if (transitioned) {
+    await broadcastLobbyChange(currentLobby.join_code, "settle");
   }
 
   return { lobby: currentLobby, players: currentPlayers };

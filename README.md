@@ -139,6 +139,13 @@ Gameplay, scoring, leaderboards, statistics, authentication, the admin review wo
    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
    ```
 
+   Optionally add the two Supabase values below to enable push updates in multiplayer lobbies. Without them lobbies still work and simply poll every two seconds. Use the **anon (public)** key from Project Settings > API, never the `service_role` key: that one bypasses row level security, and anything prefixed `NEXT_PUBLIC_` ships to every browser. The anon key is safe here because the lobby tables have RLS enabled with no policies, so it cannot read them.
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+   ```
+
 7. Start the app:
 
    ```bash

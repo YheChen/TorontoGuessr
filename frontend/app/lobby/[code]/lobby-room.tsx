@@ -34,9 +34,15 @@ import {
   secondsUntil,
   writeLobbyToken,
 } from "@/lib/lobby-client";
+import { subscribeToLobby } from "@/lib/lobby-realtime";
 import type { GuessLocation, LobbyState } from "@/lib/types";
 
+/** Polling cadence when the push socket is not carrying changes. */
 const POLL_INTERVAL_MS = 2000;
+/** Slower safety net once push is live: it only has to catch missed messages. */
+const POLL_INTERVAL_PUSHED_MS = 10000;
+/** A change can arrive as a burst (a guess that also reveals); coalesce them. */
+const REFETCH_DEBOUNCE_MS = 120;
 const MAX_ROUND_SCORE = 5000;
 
 function sanitizeName(value: string): string {
@@ -58,6 +64,8 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
   const [isJoining, setIsJoining] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tick, setTick] = useState(0);
+  // True while the push socket is live; polling backs off to a safety net.
+  const [pushConnected, setPushConnected] = useState(false);
   // Tracks which round the local pin belongs to, so it clears on a new round.
   const pinRoundRef = useRef<number | null>(null);
 
@@ -86,19 +94,48 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
   // polling is also what drives round progression forward. A finished lobby is
   // terminal: stop polling so viewers do not hammer the API forever, and so the
   // final score animation is not restarted by a re-render every two seconds.
+  // While push is connected this drops to a slow safety net.
   const lobbyFinished = state?.status === "finished";
   useEffect(() => {
     if (!tokenChecked || lobbyFinished) return;
     let cancelled = false;
     void load(playerToken);
-    const timer = window.setInterval(() => {
-      if (!cancelled) void load(playerToken);
-    }, POLL_INTERVAL_MS);
+    const timer = window.setInterval(
+      () => {
+        if (!cancelled) void load(playerToken);
+      },
+      pushConnected ? POLL_INTERVAL_PUSHED_MS : POLL_INTERVAL_MS,
+    );
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [load, playerToken, tokenChecked, lobbyFinished]);
+  }, [load, playerToken, tokenChecked, lobbyFinished, pushConnected]);
+
+  // Push: refetch as soon as the backend says something moved, instead of
+  // waiting out the poll. Debounced because one action can emit a burst.
+  useEffect(() => {
+    if (!tokenChecked || lobbyFinished) return;
+
+    let debounce: number | undefined;
+    const subscription = subscribeToLobby(
+      joinCode,
+      () => {
+        window.clearTimeout(debounce);
+        debounce = window.setTimeout(
+          () => void load(playerToken),
+          REFETCH_DEBOUNCE_MS,
+        );
+      },
+      setPushConnected,
+    );
+
+    return () => {
+      window.clearTimeout(debounce);
+      subscription?.unsubscribe();
+      setPushConnected(false);
+    };
+  }, [joinCode, load, playerToken, tokenChecked, lobbyFinished]);
 
   // Local 1s tick so the countdown moves between polls.
   useEffect(() => {
