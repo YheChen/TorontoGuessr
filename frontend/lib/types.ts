@@ -137,6 +137,15 @@ export interface JoinLobbyResponse {
   playerToken: string;
 }
 
+export interface Profile {
+  userId: string;
+  displayName: string | null;
+  isAnonymous: boolean;
+  currentStreak: number;
+  bestStreak: number;
+  lastPlayedDate: string | null;
+}
+
 export type LocationReviewStatus = "pending" | "rejected" | "accepted";
 
 export interface LocationReviewEntry {

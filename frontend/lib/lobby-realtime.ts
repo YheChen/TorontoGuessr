@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase-client";
 
 /**
  * Push notifications for lobby changes.
@@ -11,30 +11,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * rather than correctness.
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
 /** False when the project is not configured, so callers keep fast polling. */
-export const isLobbyRealtimeConfigured = Boolean(
-  SUPABASE_URL && SUPABASE_ANON_KEY
-);
-
-let client: SupabaseClient | null = null;
-
-function getClient(): SupabaseClient | null {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return null;
-  }
-  if (!client) {
-    client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false },
-      // A lobby only needs change nudges; cap the rate so a burst of
-      // broadcasts cannot spin the client.
-      realtime: { params: { eventsPerSecond: 5 } },
-    });
-  }
-  return client;
-}
+export const isLobbyRealtimeConfigured = isSupabaseConfigured;
 
 export function lobbyChannelName(joinCode: string): string {
   return `lobby:${joinCode.toUpperCase()}`;
@@ -57,7 +35,7 @@ export function subscribeToLobby(
   onChange: () => void,
   onStatusChange?: (connected: boolean) => void
 ): LobbySubscription | null {
-  const supabase = getClient();
+  const supabase = getSupabaseClient();
   if (!supabase) {
     return null;
   }
