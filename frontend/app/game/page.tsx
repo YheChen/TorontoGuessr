@@ -30,6 +30,7 @@ import {
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
 import { parseGameParams } from "@/lib/game-params";
+import { toLeaderboardName } from "@/lib/leaderboard-name";
 import { recordPlayedToday, type StreakState } from "@/lib/streak";
 import { ShareResults } from "@/components/share-results";
 import { ChallengeFriend } from "@/components/challenge-friend";
@@ -87,9 +88,15 @@ export default function Game() {
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [isSavingScore, setIsSavingScore] = useState(false);
   const [streak, setStreak] = useState<StreakState | null>(null);
+  // True once an account exists. A signed-in player's leaderboard name comes
+  // from their account, so the guest name form is not shown to them at all.
+  const [hasAccount, setHasAccount] = useState(false);
   // Which session's finish has already been counted, so a re-render of the
   // summary cannot record the same game twice.
   const countedSessionRef = useRef<string | null>(null);
+  // The session-and-name pair already filed on the leaderboard, so the account
+  // name effect cannot post the same thing repeatedly.
+  const filedNameRef = useRef<string | null>(null);
 
   const totalScore = scores.reduce((sum, round) => sum + round.score, 0);
 
@@ -101,6 +108,7 @@ export default function Game() {
     setSaveMessage(null);
     setSaveErrorMessage(null);
     setIsSavingScore(false);
+    filedNameRef.current = null;
 
     // The mode comes from the URL so links can target it: ?mode=daily for the
     // daily challenge, ?mode=challenge&c=CODE to replay a shared challenge.
@@ -177,6 +185,51 @@ export default function Game() {
       setSaveErrorMessage(message);
     } finally {
       setIsSavingScore(false);
+    }
+  };
+
+  /**
+   * File this game under the signed-in player's account name.
+   *
+   * Runs without being asked, because a signed-in player is never shown the
+   * guest name form: their account name is the only name they have given us, so
+   * expecting a second, separate one would just lose their score.
+   *
+   * The two namespaces do not have the same rules, so the display name is
+   * reduced to something the leaderboard can store. The server re-validates and
+   * owns the blocked-word list, so its answer is what gets displayed.
+   */
+  const syncLeaderboardName = async (displayName: string) => {
+    if (!sessionId) {
+      return;
+    }
+
+    const leaderboardName = toLeaderboardName(displayName);
+    if (!leaderboardName) {
+      return;
+    }
+
+    const attempt = `${sessionId}:${leaderboardName}`;
+    if (filedNameRef.current === attempt) {
+      return;
+    }
+    filedNameRef.current = attempt;
+
+    setSaveMessage(null);
+    setSaveErrorMessage(null);
+
+    try {
+      const response = await saveScoreUsername(sessionId, leaderboardName);
+      setSavedUsername(response.saved.username);
+      setSaveMessage(`On the leaderboard as ${response.saved.username}.`);
+    } catch (error) {
+      // Clear the guard so a name the server refused can be replaced by another.
+      filedNameRef.current = null;
+      setSaveErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not save your score to the leaderboard.",
+      );
     }
   };
 
@@ -555,51 +608,66 @@ export default function Game() {
               </div>
 
               {/* Offer to keep the streak beyond this browser */}
-              <SaveProgress />
+              <SaveProgress
+                onAccountChange={setHasAccount}
+                onDisplayName={(displayName) =>
+                  void syncLeaderboardName(displayName)
+                }
+                leaderboardStatus={
+                  saveErrorMessage
+                    ? { kind: "error", message: saveErrorMessage }
+                    : saveMessage
+                      ? { kind: "saved", message: saveMessage }
+                      : null
+                }
+              />
 
-              {/* Save username */}
-              <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-150 sm:p-7">
-                <div className="flex items-center gap-2">
-                  <Save className="size-4 text-primary" />
-                  <h3 className="text-sm font-semibold">
-                    Save your name to the leaderboard
-                  </h3>
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    value={usernameInput}
-                    onChange={(event) =>
-                      handleUsernameChange(event.target.value)
-                    }
-                    placeholder={savedUsername}
-                    maxLength={10}
-                    aria-label="Leaderboard name"
-                    className="sm:flex-1"
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => void handleSaveScore()}
-                    disabled={isSavingScore}
-                    className="sm:min-w-[140px]"
-                  >
-                    {isSavingScore ? "Saving…" : "Save name"}
-                  </Button>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Letters and numbers only, up to 10 characters.
-                </p>
-                {saveMessage && (
-                  <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-success">
-                    <Check className="size-4" />
-                    {saveMessage}
+              {/* Save username. Guests only: a signed-in player's leaderboard
+                  name is their account name, filed automatically above. */}
+              {!hasAccount && (
+                <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-150 sm:p-7">
+                  <div className="flex items-center gap-2">
+                    <Save className="size-4 text-primary" />
+                    <h3 className="text-sm font-semibold">
+                      Save your name to the leaderboard
+                    </h3>
+                  </div>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      value={usernameInput}
+                      onChange={(event) =>
+                        handleUsernameChange(event.target.value)
+                      }
+                      placeholder={savedUsername}
+                      maxLength={10}
+                      aria-label="Leaderboard name"
+                      className="sm:flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => void handleSaveScore()}
+                      disabled={isSavingScore}
+                      className="sm:min-w-[140px]"
+                    >
+                      {isSavingScore ? "Saving…" : "Save name"}
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Letters and numbers only, up to 10 characters.
                   </p>
-                )}
-                {saveErrorMessage && (
-                  <p className="mt-2 text-sm font-medium text-destructive">
-                    {saveErrorMessage}
-                  </p>
-                )}
-              </div>
+                  {saveMessage && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-success">
+                      <Check className="size-4" />
+                      {saveMessage}
+                    </p>
+                  )}
+                  {saveErrorMessage && (
+                    <p className="mt-2 text-sm font-medium text-destructive">
+                      {saveErrorMessage}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">

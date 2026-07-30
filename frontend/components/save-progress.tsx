@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, CloudUpload, Flame, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, CloudUpload, Flame, ShieldCheck, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Turnstile, isTurnstileConfigured } from "@/components/turnstile";
@@ -12,6 +12,7 @@ import {
   type Session,
 } from "@/lib/auth-client";
 import { fetchProfile, updateDisplayName } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 
 /**
@@ -29,7 +30,33 @@ import type { Profile } from "@/lib/types";
 
 type Stage = "idle" | "verifying" | "signing-in" | "done" | "error";
 
-export function SaveProgress() {
+/** Outcome of the page's attempt to file the score under this account's name. */
+export interface LeaderboardStatus {
+  kind: "saved" | "error";
+  message: string;
+}
+
+interface SaveProgressProps {
+  /**
+   * Reports whether an account exists. The page uses this to drop the guest
+   * leaderboard form, since a signed-in player's name comes from here instead.
+   */
+  onAccountChange?: (hasAccount: boolean) => void;
+  /**
+   * Called with the account's display name whenever one is known: on arrival
+   * for an account that already has one, and again after a rename. The page
+   * files the score under it, so a player never has to type their name twice.
+   */
+  onDisplayName?: (displayName: string) => void;
+  /** Result of that filing, shown here because this is where the name was typed. */
+  leaderboardStatus?: LeaderboardStatus | null;
+}
+
+export function SaveProgress({
+  onAccountChange,
+  onDisplayName,
+  leaderboardStatus = null,
+}: SaveProgressProps = {}) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
@@ -37,6 +64,31 @@ export function SaveProgress() {
   const [name, setName] = useState("");
   const [nameMessage, setNameMessage] = useState<string | null>(null);
   const [isSavingName, setIsSavingName] = useState(false);
+
+  // Held in refs so a parent that passes inline callbacks does not re-trigger
+  // the effects below on every one of its renders.
+  const onAccountChangeRef = useRef(onAccountChange);
+  const onDisplayNameRef = useRef(onDisplayName);
+  useEffect(() => {
+    onAccountChangeRef.current = onAccountChange;
+    onDisplayNameRef.current = onDisplayName;
+  }, [onAccountChange, onDisplayName]);
+
+  useEffect(() => {
+    onAccountChangeRef.current?.(session !== null);
+  }, [session]);
+
+  // One effect covers both moments a name becomes known, because both arrive as
+  // a change to the profile: loading an account that was already named, and
+  // saving a new name. The page is responsible for not filing the same name
+  // twice.
+  useEffect(() => {
+    const displayName = profile?.displayName;
+    if (!displayName) {
+      return;
+    }
+    onDisplayNameRef.current?.(displayName);
+  }, [profile?.displayName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,10 +191,26 @@ export function SaveProgress() {
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            3 to 16 characters: letters, numbers, and underscores.
+            3 to 16 characters: letters, numbers, and underscores. This is also
+            the name your scores appear under on the leaderboard.
           </p>
           {nameMessage && (
             <p className="mt-2 text-sm font-medium text-foreground">{nameMessage}</p>
+          )}
+          {leaderboardStatus && (
+            <p
+              className={cn(
+                "mt-2 inline-flex items-center gap-1.5 text-sm font-medium",
+                leaderboardStatus.kind === "saved"
+                  ? "text-success"
+                  : "text-destructive"
+              )}
+            >
+              {leaderboardStatus.kind === "saved" && (
+                <Trophy className="size-4" />
+              )}
+              {leaderboardStatus.message}
+            </p>
           )}
         </div>
       </div>
