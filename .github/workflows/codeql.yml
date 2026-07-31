@@ -1,12 +1,19 @@
 name: CodeQL
 
 # Static security analysis for the JS/TS in both workspaces. Runs on pushes to
-# main, on PRs, and weekly so newly disclosed query patterns catch old code.
+# main, on every PR, and weekly so newly disclosed query patterns catch old code.
+#
+# `pull_request` carries no branch filter on purpose. It used to be limited to
+# PRs targeting main, which had two costs. Stacked PRs got no security scanning at
+# all, since their base is another feature branch. Worse, once "Analyze JS/TS" is
+# a required check, a PR retargeted onto main after its base merged would never
+# run it: a base change fires pull_request.edited, which is not one of the events
+# that starts a workflow, so the required check would simply be absent and the PR
+# would be unmergeable with nothing to click.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   schedule:
     - cron: "27 3 * * 1"
 
