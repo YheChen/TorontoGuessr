@@ -41,6 +41,7 @@ import {
   getLobbyState,
   joinLobby,
   leaveLobby,
+  rematchLobby,
   startLobby,
   submitLobbyGuess,
 } from "./lobby-store.js";
@@ -554,6 +555,35 @@ export async function routeRequest(
         200,
         await advanceLobby(
           requireLobbyCode(lobbyNextParams.code),
+          lobbyPlayerToken(request)
+        )
+      );
+      return;
+    }
+
+    const lobbyRematchParams = matchRoute(pathname, "/lobbies/:code/rematch");
+    if (request.method === "POST" && lobbyRematchParams?.code) {
+      // Deals five fresh rounds, so it is capped like creating a lobby rather
+      // than like the free routes.
+      const rateLimit = checkRateLimit(`lobby-rematch:${clientIp(request)}`, {
+        limit: 10,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(
+          response,
+          429,
+          "Too many new games from this address. Please wait a moment."
+        );
+        return;
+      }
+
+      sendJson(
+        response,
+        200,
+        await rematchLobby(
+          requireLobbyCode(lobbyRematchParams.code),
           lobbyPlayerToken(request)
         )
       );

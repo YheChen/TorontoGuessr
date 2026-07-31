@@ -325,6 +325,111 @@ export async function startLobby(
   return buildStatePayload(started, players, viewer);
 }
 
+/**
+ * Start a fresh game with the players already here.
+ *
+ * The point is that nobody re-joins. A new lobby means a new code, the host
+ * reading it out, and everyone typing it again, which is enough friction that a
+ * group who wanted one more round often just stops. This keeps the code, the
+ * players and their seats, and resets everything that belongs to a single game.
+ *
+ * Deliberately NOT a new lobby row. Reusing this one is what preserves the
+ * player rows, and with them each player's token, so no client has to
+ * re-authenticate or be told anything new.
+ *
+ * SCORES ARE CLEARED, INCLUDING FOR DISCONNECTED PLAYERS. A player whose tab is
+ * still open rejoins the new game automatically; one who closed it leaves a reset
+ * row behind, which is harmless and is also what makes their return clean if they
+ * come back. Nothing preserves the previous game's scores: the final scoreboard
+ * has already been shown, and keeping stale totals visible next to a fresh game
+ * would be worse than losing them.
+ */
+export async function rematchLobby(
+  joinCode: string,
+  playerToken: string
+): Promise<LobbyStatePayload> {
+  const lobby = await fetchLobbyByCode(joinCode);
+  const players = await fetchPlayers(lobby.id);
+  const viewer = findViewer(players, playerToken);
+
+  if (!viewer) {
+    throw createHttpError(403, "You are not in this lobby.");
+  }
+  if (viewer.id !== lobby.host_player_id) {
+    throw createHttpError(403, "Only the host can start another game.");
+  }
+  if (lobby.status !== "finished") {
+    throw createHttpError(409, "That game is still in progress.");
+  }
+
+  const rounds = await selectGameRounds(LOBBY_ROUNDS, null);
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  // The lobby row first, guarded on status='finished' so two rematch requests
+  // cannot both deal rounds. Same shape as the guard in startLobby.
+  //
+  // Order matters: if this claims the rematch and the player reset below then
+  // fails, the game is playable with stale totals, which is recoverable. Doing it
+  // the other way round could wipe the scoreboard while leaving the lobby
+  // finished, which shows a table of zeroes as the final result.
+  const restarted = await guarded(() =>
+    updateSingleRow<LobbyRecord>(
+      LOBBIES_TABLE,
+      {
+        rounds,
+        status: "in_progress",
+        total_rounds: rounds.length,
+        current_round_index: 0,
+        round_revealed: false,
+        round_started_at: nowIso,
+        round_deadline_at: new Date(
+          now + lobby.round_time_limit_seconds * 1000
+        ).toISOString(),
+        reveal_deadline_at: null,
+        updated_at: nowIso,
+        // A finished lobby is close to its six-hour expiry by the time anyone asks
+        // for a rematch, and the reaper deletes on expires_at. Without this the
+        // new game could be swept out from under the players mid-round.
+        expires_at: new Date(now + LOBBY_TTL_MS).toISOString(),
+      },
+      {
+        filters: { id: lobby.id, status: "finished" },
+        columns: LOBBY_COLUMNS,
+      }
+    )
+  );
+
+  if (!restarted) {
+    // Lost the race; serve whatever the winner established.
+    return getLobbyState(joinCode, playerToken);
+  }
+
+  const resetPlayers = await Promise.all(
+    players.map(async (player) => {
+      const updated = await guarded(() =>
+        updateSingleRow<LobbyPlayerRecord>(
+          LOBBY_PLAYERS_TABLE,
+          { total_score: 0, results: [], last_seen_at: nowIso },
+          { filters: { id: player.id }, columns: PLAYER_COLUMNS_WITH_TOKEN }
+        )
+      );
+      // The token hash is carried over rather than re-read: PLAYER_COLUMNS omits
+      // it everywhere else, and findViewer below needs it to identify the caller.
+      return updated
+        ? { ...updated, player_token_hash: player.player_token_hash }
+        : { ...player, total_score: 0, results: [] };
+    })
+  );
+
+  await broadcastLobbyChange(joinCode, "rematch");
+  return buildStatePayload(
+    restarted,
+    resetPlayers,
+    findViewer(resetPlayers, playerToken)
+  );
+}
+
 export async function submitLobbyGuess(
   joinCode: string,
   playerToken: string,

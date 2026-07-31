@@ -236,6 +236,19 @@ export function advanceLobby(joinCode: string, playerToken: string) {
   });
 }
 
+/**
+ * Start another game with the players already in the lobby.
+ *
+ * Host only, and only once the lobby has finished. The join code and every
+ * player's seat survive, so nobody re-joins; scores reset.
+ */
+export function rematchLobby(joinCode: string, playerToken: string) {
+  return request<LobbyState>(`/lobbies/${encodeURIComponent(joinCode)}/rematch`, {
+    method: "POST",
+    headers: getPlayerHeaders(playerToken),
+  });
+}
+
 export function leaveLobby(joinCode: string, playerToken: string) {
   return request<{ left: boolean }>(
     `/lobbies/${encodeURIComponent(joinCode)}/leave`,
