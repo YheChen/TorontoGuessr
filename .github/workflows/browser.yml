@@ -10,9 +10,12 @@ name: Browser checks
 #     suite is untestable. The e2e config documents this.
 #   * Vercel preview deployments sit behind SSO, so a preview URL answers 302 to
 #     vercel.com/sso-api. Reaching one needs the project's automation bypass
-#     secret, which is not configured. Add VERCEL_AUTOMATION_BYPASS_SECRET as a
-#     repository secret and this workflow will start checking previews too, before
-#     merge, which is strictly better than after.
+#     secret, which is not configured, so previews are not run AT ALL rather than
+#     run-and-skipped. A skipped job still reports a green check, and a green
+#     "Browser checks" on a PR that tested nothing is worse than no check: that
+#     exact green appeared on PR 60 with every test step skipped. To check previews
+#     before merge, add VERCEL_AUTOMATION_BYPASS_SECRET and widen the `if` below to
+#     include preview environments.
 on:
   deployment_status:
   workflow_dispatch:
@@ -27,8 +30,14 @@ permissions:
 
 # Never cancel an in-flight run: each one starts a real game, and killing it
 # midway leaves a session in a stranger state than letting it finish.
+# Keyed on the ENVIRONMENT as well as the ref. Both Vercel projects report a
+# deployment_status for the same commit, so a ref-only group put the frontend and
+# backend events in one queue, where one was cancelled and the frontend's
+# production run never happened.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}-${{
+      github.event.deployment.environment || 'dispatch' }}
   cancel-in-progress: false
 
 jobs:
@@ -47,6 +56,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.deployment_status.state == 'success' &&
+       startsWith(github.event.deployment.environment, 'Production') &&
        !contains(github.event.deployment.environment, 'backend'))
     runs-on: ubuntu-latest
     steps:
@@ -61,37 +71,29 @@ jobs:
         id: target
         env:
           DISPATCH_URL: ${{ inputs.base_url }}
-          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
-          ENVIRONMENT: ${{ github.event.deployment.environment }}
-          # Readable here, unlike in a job-level if.
-          BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
-          url="${DISPATCH_URL:-$DEPLOY_URL}"
-          url="${url:-https://www.torontoguessr.ca}"
+          # The CANONICAL domain, not github.event.deployment_status.environment_url.
+          #
+          # Vercel reports environment_url as the deployment-specific host even for
+          # a production deployment, and that host is behind Vercel's SSO: measured
+          # 302 for https://toronto-guessr-<hash>-yhechens-projects.vercel.app while
+          # https://www.torontoguessr.ca answered 200 for the same deployment. Using
+          # it meant the whole suite ran against a login page, which failed as every
+          # element being invisible and looked like a catastrophic layout break.
+          #
+          # A production deployment_status is only ever about the live site, so the
+          # live domain is the right target and needs no secret.
+          url="${DISPATCH_URL:-https://www.torontoguessr.ca}"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-
-          # A preview deployment answers 302 to vercel.com/sso-api without the
-          # project's automation bypass secret, so every check would fail for a
-          # reason that is not about this repo. Skipped rather than failed, and
-          # said out loud so a silent skip is not mistaken for a pass.
-          if [ "$GITHUB_EVENT_NAME" = "deployment_status" ] \
-             && ! printf '%s' "$ENVIRONMENT" | grep -qi '^production' \
-             && [ -z "$BYPASS" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipped: $ENVIRONMENT is a preview and VERCEL_AUTOMATION_BYPASS_SECRET is not set, so the URL would answer 302. Add that secret to check previews before merge."
-          else
-            echo "Testing $url"
-          fi
+          echo "Testing $url"
 
       # Only chromium. A second engine would double the runtime to re-check
       # geometry that is not engine specific.
       - name: Install Chromium
-        if: steps.target.outputs.skip != 'true'
         run: npx playwright install --with-deps chromium
         working-directory: frontend
 
       - name: Run browser checks
-        if: steps.target.outputs.skip != 'true'
         run: npm run e2e
         working-directory: frontend
         env:
