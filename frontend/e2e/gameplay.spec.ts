@@ -29,13 +29,30 @@ async function navBottom(page: Page): Promise<number> {
   return box ? box.y + box.height : 0;
 }
 
-/** Horizontal overflow of the document, in pixels. */
-function pageOverflow(page: Page): Promise<number> {
-  return page.evaluate(
-    () =>
+/**
+ * Horizontal overflow of the document, in pixels, measured once the page has
+ * stopped changing size.
+ *
+ * The settle is not belt-and-braces. Measuring immediately after goto() caught
+ * pages mid-webfont-swap on CI's Linux Chromium, where the fallback face is wider
+ * than the loaded one, and reported 3-4px of overflow that was gone a frame
+ * later. It showed up as a DIFFERENT set of failing page-and-width pairs on every
+ * retry, which is the signature of a race rather than a layout constant, and it
+ * did not reproduce on macOS where the font resolves faster.
+ *
+ * document.fonts.ready is the specific fix; the two animation frames after it let
+ * the reflow that font swap causes actually land.
+ */
+async function pageOverflow(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    return (
       document.documentElement.scrollWidth -
       document.documentElement.clientWidth
-  );
+    );
+  });
 }
 
 /**
@@ -139,7 +156,10 @@ test("the navbar fits inside its container at every width", async ({ page }) => 
 
   for (const width of SWEEP_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
-    const spill = await page.evaluate(() => {
+    const spill = await page.evaluate(async () => {
+      // Same font settle as pageOverflow: this measures rendered text too.
+      await document.fonts.ready;
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
       const inner = document.querySelector("header > div");
       if (!(inner instanceof HTMLElement)) return 0;
       const last = inner.lastElementChild;
