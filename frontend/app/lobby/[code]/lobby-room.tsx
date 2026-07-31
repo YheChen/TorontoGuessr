@@ -9,6 +9,7 @@ import {
   Flag,
   MapPin,
   Play,
+  RotateCcw,
   Trophy,
   Users,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
   advanceLobby,
   fetchLobbyState,
   joinLobby,
+  rematchLobby,
   startLobby,
   submitLobbyGuess,
 } from "@/lib/api";
@@ -43,6 +45,19 @@ const POLL_INTERVAL_MS = 2000;
 const POLL_INTERVAL_PUSHED_MS = 10000;
 /** A change can arrive as a burst (a guess that also reveals); coalesce them. */
 const REFETCH_DEBOUNCE_MS = 120;
+/**
+ * How often a finished lobby checks whether the host started another game.
+ *
+ * Far slower than gameplay polling because the only thing being waited for is one
+ * button press, and a few seconds late costs nothing.
+ */
+const REMATCH_POLL_MS = 3000;
+/**
+ * How long to keep watching. A tab left open on a final scoreboard should not
+ * poll for the rest of the day, so the watch gives up and says so rather than
+ * running until the lobby expires and starts answering 404.
+ */
+const REMATCH_WATCH_MS = 10 * 60 * 1000;
 const MAX_ROUND_SCORE = 5000;
 
 function sanitizeName(value: string): string {
@@ -68,6 +83,9 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
   const [pushConnected, setPushConnected] = useState(false);
   // Tracks which round the local pin belongs to, so it clears on a new round.
   const pinRoundRef = useRef<number | null>(null);
+  const [isRematching, setIsRematching] = useState(false);
+  // True once the finished lobby has stopped watching for a rematch.
+  const [rematchWatchEnded, setRematchWatchEnded] = useState(false);
 
   useEffect(() => {
     setPlayerToken(readLobbyToken(joinCode));
@@ -137,6 +155,55 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
     };
   }, [joinCode, load, playerToken, tokenChecked, lobbyFinished]);
 
+  /**
+   * While the lobby is finished, watch for the host starting another game.
+   *
+   * A separate effect from the gameplay poll above, and not simply a matter of
+   * letting that one keep running, for two reasons the original comment on it
+   * names: a finished lobby should not hammer the API, and re-rendering the final
+   * screen every couple of seconds restarts the winner's score animation.
+   *
+   * Both are handled by committing state ONLY once the lobby is no longer
+   * finished. Nothing else on that screen can change, so a poll that comes back
+   * still-finished is dropped and the screen never re-renders. That is also why
+   * this does not reuse `load`, which commits unconditionally.
+   */
+  useEffect(() => {
+    if (!tokenChecked || !lobbyFinished) return;
+
+    let cancelled = false;
+    let waited = 0;
+
+    const timer = window.setInterval(() => {
+      waited += REMATCH_POLL_MS;
+      if (waited >= REMATCH_WATCH_MS) {
+        window.clearInterval(timer);
+        if (!cancelled) setRematchWatchEnded(true);
+        return;
+      }
+
+      void (async () => {
+        try {
+          const next = await fetchLobbyState(joinCode, playerToken);
+          // Still finished means the host has not pressed anything yet. Dropping
+          // it keeps the final scoreboard perfectly still.
+          if (!cancelled && next.status !== "finished") {
+            setState(next);
+            setFetchedAt(Date.now());
+          }
+        } catch {
+          // Transient; the next tick tries again. A failure here must not replace
+          // the final scoreboard with an error.
+        }
+      })();
+    }, REMATCH_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [tokenChecked, lobbyFinished, joinCode, playerToken]);
+
   // Local 1s tick so the countdown moves between polls.
   useEffect(() => {
     const timer = window.setInterval(() => setTick((value) => value + 1), 1000);
@@ -190,6 +257,19 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
       () => startLobby(joinCode, playerToken),
       "Could not start the game.",
     );
+
+  const handleRematch = async () => {
+    if (!playerToken) return;
+    setIsRematching(true);
+    // Cleared so a stale "watch ended" note cannot sit under a game that is now
+    // running, in case the host presses this after the watch window lapsed.
+    setRematchWatchEnded(false);
+    await runAction(
+      () => rematchLobby(joinCode, playerToken),
+      "Could not start another game.",
+    );
+    setIsRematching(false);
+  };
 
   const handleAdvance = () =>
     playerToken &&
@@ -485,13 +565,30 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
             </div>
           </div>
 
+          {/* Another game with the same people, same code, nobody re-joining.
+              Only the host can press it, because only the host can deal rounds,
+              so everyone else gets told what they are waiting for rather than
+              being shown a button that would refuse them. */}
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button asChild size="xl" className="rounded-2xl shadow-glow">
-              <Link href="/lobby">
-                <Users className="size-5" />
-                New lobby
-              </Link>
-            </Button>
+            {isHost ? (
+              <Button
+                type="button"
+                size="xl"
+                className="rounded-2xl shadow-glow"
+                onClick={() => void handleRematch()}
+                disabled={isRematching}
+              >
+                <RotateCcw className="size-5" />
+                {isRematching ? "Starting…" : "Play again"}
+              </Button>
+            ) : (
+              <Button asChild size="xl" className="rounded-2xl shadow-glow">
+                <Link href="/lobby">
+                  <Users className="size-5" />
+                  New lobby
+                </Link>
+              </Button>
+            )}
             <Button asChild size="xl" variant="outline" className="rounded-2xl">
               <Link href="/leaderboard">
                 <Trophy className="size-5" />
@@ -499,6 +596,29 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
               </Link>
             </Button>
           </div>
+
+          {isHost ? (
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              Play again keeps everyone here, on code {state.joinCode}. Scores
+              reset and five new locations are dealt.
+            </p>
+          ) : rematchWatchEnded ? (
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              Stopped watching for a new game. Reload this page if the host starts
+              one.
+            </p>
+          ) : (
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              Stay here if you want another round: if the host starts one, this
+              page joins it automatically.
+            </p>
+          )}
+
+          {actionMessage && (
+            <p className="mt-3 text-center text-sm font-medium text-destructive">
+              {actionMessage}
+            </p>
+          )}
         </div>
       </section>
     );
