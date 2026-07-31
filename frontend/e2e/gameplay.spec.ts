@@ -41,15 +41,31 @@ function pageOverflow(page: Page): Promise<number> {
 /**
  * How much sideways overflow is tolerated.
  *
- * Not zero, and not a guess. Every page measures exactly 4px today, on
- * production and on a local build alike, at both 1280px and 390px. It comes from
- * a decorative `-inset-6 -z-10` glow behind the hero and is cosmetic, but it is
- * real: it makes the page swipeable sideways by 4px on a phone. Asserting 0 would
- * mean shipping a red test, and quietly raising the bar to 64px would mean
- * shipping a test that catches nothing. 8px keeps the assertion sharp enough to
- * catch a layout escape while naming the debt it is standing on.
+ * 1px, which is a sub-pixel rounding guard and nothing more: every page measures
+ * exactly 0 at all nineteen widths swept below. It was briefly 8px to accommodate
+ * a real 4px escape from a decorative glow behind the hero; that is fixed, so the
+ * bar is back where it belongs.
  */
-const OVERFLOW_TOLERANCE_PX = 8;
+const OVERFLOW_TOLERANCE_PX = 1;
+
+/**
+ * Widths swept by the responsive check.
+ *
+ * The three boundary values are the point. A single 877px min-content width in
+ * the hero used to blow the whole layout out between 640px and 1023px, worst at
+ * 640px with 281px of sideways scroll, while 390px and 1280px both measured a
+ * tidy 4px and looked fine. Testing two comfortable widths proved nothing about
+ * the band in between, which includes 768px, the commonest tablet width there is.
+ * 767/768/769 bracket the md breakpoint, where the desktop nav appears and where
+ * the navbar used to spill its Play button past the viewport edge.
+ */
+const SWEEP_WIDTHS = [
+  320, 360, 390, 414, 540, 640, 700, 767, 768, 769, 834, 900, 1023, 1024, 1280,
+  1440, 1920,
+] as const;
+
+/** Pages that render fully without Google Maps, so a sweep can be cheap. */
+const SWEEP_PATHS = ["/", "/leaderboard", "/about", "/stats", "/lobby"] as const;
 
 test("the landing page renders its hero", async ({ page }) => {
   await page.goto("/");
@@ -83,6 +99,63 @@ test("the leaderboard renders rows or says it is empty", async ({ page }) => {
   expect(await pageOverflow(page), "horizontal page overflow").toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
 });
 
+/**
+ * No page may scroll sideways, at any width.
+ *
+ * The cheapest test here and the one that would have caught the most: a hero
+ * column stuck at 877px across the whole tablet band, and a navbar spilling its
+ * Play button past the viewport edge at exactly 768px. Neither was visible at the
+ * two widths the rest of this file happens to use.
+ */
+test("no page scrolls sideways at any width", async ({ page }) => {
+  const failures: string[] = [];
+
+  for (const path of SWEEP_PATHS) {
+    for (const width of SWEEP_WIDTHS) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(path);
+      const overflow = await pageOverflow(page);
+      if (overflow > OVERFLOW_TOLERANCE_PX) {
+        failures.push(`${path} at ${width}px overflows by ${overflow}px`);
+      }
+    }
+  }
+
+  expect(failures, failures.join("; ")).toEqual([]);
+});
+
+/**
+ * The navbar has to fit inside its own container.
+ *
+ * Separate from the overflow sweep because it fails EARLIER and says more. When
+ * the three navbar groups need more than the content box, justify-between runs
+ * out of free space and the last one spills right; at 768px that clipped the Play
+ * button's rounded corner flat against the viewport edge while the document
+ * itself only reported 1px, which is easy to dismiss as rounding.
+ */
+test("the navbar fits inside its container at every width", async ({ page }) => {
+  const failures: string[] = [];
+  await page.goto("/");
+
+  for (const width of SWEEP_WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    const spill = await page.evaluate(() => {
+      const inner = document.querySelector("header > div");
+      if (!(inner instanceof HTMLElement)) return 0;
+      const last = inner.lastElementChild;
+      if (!(last instanceof HTMLElement)) return 0;
+      const paddingRight = parseFloat(getComputedStyle(inner).paddingRight);
+      const contentRight = inner.getBoundingClientRect().right - paddingRight;
+      return last.getBoundingClientRect().right - contentRight;
+    });
+    if (spill > 1) {
+      failures.push(`the navbar spills ${Math.round(spill)}px at ${width}px`);
+    }
+  }
+
+  expect(failures, failures.join("; ")).toEqual([]);
+});
+
 test.describe("a round of play", () => {
   test("mounts both maps, scores a guess, and keeps the results flush", async ({
     page,
@@ -90,7 +163,9 @@ test.describe("a round of play", () => {
     const failures: string[] = [];
     page.on("response", (response) => {
       if (response.url().includes("/games/") && !response.ok()) {
-        failures.push(`${response.status()} ${response.url()}`);
+        failures.push(
+          `${response.status()} ${response.request().method()} ${response.url()}`
+        );
       }
     });
 
@@ -152,8 +227,13 @@ test.describe("a round of play", () => {
     // guess carries the X-Play-Token header, so a real browser preflight had to
     // accept it. curl does not preflight, so nothing else checks that.
     const result = page.getByTestId("round-result");
-    await expect(result).toBeVisible();
-    expect(failures, "gameplay requests failed").toEqual([]);
+    // The request check comes FIRST. When the guess call fails, the result card
+    // simply never appears, and asserting on the card first reports "element not
+    // visible" while the status code that explains it sits unread in `failures`.
+    await expect(async () => {
+      expect(failures, "gameplay requests failed").toEqual([]);
+      await expect(result).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 25_000 });
 
     // ── The PR 39 regression ──────────────────────────────────────────────
     // A 256px prefetch surface dropped into normal flow and pushed the results
