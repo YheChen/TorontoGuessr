@@ -89,7 +89,13 @@ export default function Home() {
               pure local knowledge.
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* flex-wrap is load bearing, not tidiness. Four buttons in a
+                non-wrapping sm:flex-row have a combined min-content width of
+                877px, and a grid item cannot shrink below its min-content, so
+                between 640px and 1023px the whole hero column was forced to
+                877px and the page scrolled sideways by up to 281px. Wrapping
+                drops the min-content to one button. */}
+            <div className="mt-8 flex flex-col flex-wrap gap-3 sm:flex-row sm:items-center">
               <Button asChild size="xl" className="rounded-2xl shadow-glow">
                 <Link href="/game">
                   <Play className="size-5" />
@@ -144,7 +150,13 @@ export default function Home() {
 
           <div className="relative animate-fade-up delay-150">
             <div
-              className="absolute -inset-6 -z-10 rounded-[2rem] bg-primary/20 blur-3xl"
+              // inset-x-0, not -inset-x-6. The container's padding is 20px and
+              // a 24px horizontal bleed overshot it by exactly 4px at every
+              // width, which is enough to make the page scroll sideways. The
+              // vertical bleed stays: it has nothing to escape. blur-3xl already
+              // spreads the halo 64px past this box, so losing 24px of box on
+              // each side is not visible.
+              className="absolute inset-x-0 -inset-y-6 -z-10 rounded-[2rem] bg-primary/20 blur-3xl"
               aria-hidden="true"
             />
             <div className="animate-float">
