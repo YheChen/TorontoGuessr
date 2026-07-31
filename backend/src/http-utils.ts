@@ -19,12 +19,13 @@ export function isHttpError(error: unknown): error is HttpError {
 
 export function setCorsHeaders(response: ServerResponse): void {
   response.setHeader("Access-Control-Allow-Origin", "*");
-  // X-Player-Token authenticates a lobby player. It must be listed here or the
-  // browser's preflight rejects every authenticated lobby request (curl does
-  // not preflight, so this only shows up in a real browser).
+  // X-Player-Token authenticates a lobby player, X-Play-Token the player whose
+  // single-player game it is. Both must be listed here or the browser's preflight
+  // rejects every authenticated request (curl does not preflight, so a missing
+  // entry passes every command-line test and fails only in a real browser).
   response.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-Admin-Token, X-Player-Token, Authorization"
+    "Content-Type, X-Admin-Token, X-Play-Token, X-Player-Token, Authorization"
   );
   response.setHeader(
     "Access-Control-Allow-Methods",

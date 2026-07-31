@@ -53,6 +53,12 @@ export interface GameSession {
   mode: GameMode;
   challengeDate: string | null;
   roundStartedAt: string | null;
+  /**
+   * sha256 of the play token that authenticates this game's player, or null when
+   * no token was issued (a session older than the feature, so grandfathered).
+   * Never leaves the backend: see play-token.ts.
+   */
+  playTokenHash: string | null;
 }
 
 /** Raw `game_sessions` row shape as returned by PostgREST. */
@@ -71,6 +77,8 @@ export interface GameSessionRecord {
   mode?: GameMode | null;
   challenge_date?: string | null;
   round_started_at?: string | null;
+  /** Absent until add_play_token_to_game_sessions.sql is applied. */
+  play_token_hash?: string | null;
 }
 
 export type LobbyStatus = "waiting" | "in_progress" | "finished";

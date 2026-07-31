@@ -1,6 +1,7 @@
 import { insertRow, selectSingleRow } from "./supabase.js";
 import { generateShortCode } from "./short-code.js";
 import { createHttpError } from "./http-utils.js";
+import { requirePlayToken } from "./play-token.js";
 import type { ChallengeRecord, GameRound, GameSessionRecord } from "./types.js";
 
 const CHALLENGES_TABLE = "challenges";
@@ -49,6 +50,58 @@ function unavailableError(): Error {
   );
 }
 
+type ChallengeSourceSession = Pick<
+  GameSessionRecord,
+  "rounds" | "status" | "play_token_hash"
+>;
+
+/** Flips to false when play_token_hash is missing (migration not applied yet). */
+let playTokenColumnPresent = true;
+
+function isMissingColumnError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /column .* does not exist|could not find the '.*' column/i.test(
+      error.message
+    )
+  );
+}
+
+/**
+ * The source session, with its play-token hash when the column exists.
+ *
+ * Retried without the column rather than failing, so a database that has not had
+ * add_play_token_to_game_sessions.sql applied still serves challenge links. Those
+ * sessions then have no hash, which requirePlayToken grandfathers, matching the
+ * behaviour of the game store on the same unmigrated database.
+ */
+async function selectSessionForChallenge(
+  sessionId: string
+): Promise<ChallengeSourceSession | null> {
+  const fetch = (columns: string) =>
+    selectSingleRow<ChallengeSourceSession>(GAME_SESSIONS_TABLE, {
+      columns,
+      filters: { id: sessionId },
+    });
+
+  if (!playTokenColumnPresent) {
+    return fetch("status,rounds");
+  }
+
+  try {
+    return await fetch("status,rounds,play_token_hash");
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+    playTokenColumnPresent = false;
+    console.warn(
+      "[challenge-store] play_token_hash column missing; run add_play_token_to_game_sessions.sql. Challenge links cannot be tied to the player who played the game until then."
+    );
+    return fetch("status,rounds");
+  }
+}
+
 /**
  * Snapshot a session's rounds behind a new short code.
  *
@@ -57,22 +110,27 @@ function unavailableError(): Error {
  * location pool staying unchanged.
  */
 export async function createChallengeFromSession(
-  sessionId: string
+  sessionId: string,
+  { playToken = null }: { playToken?: string | null } = {}
 ): Promise<{ code: string; totalRounds: number }> {
   if (!challengesTableAvailable) {
     throw unavailableError();
   }
 
-  const session = await selectSingleRow<
-    Pick<GameSessionRecord, "rounds" | "status">
-  >(GAME_SESSIONS_TABLE, {
-    columns: "status,rounds",
-    filters: { id: sessionId },
-  });
+  // play_token_hash is read through a nullish coalesce rather than declared
+  // required, because the column may not exist yet. Selecting it explicitly would
+  // fail the whole request on an unmigrated database; PostgREST tolerates a
+  // missing column no better here than anywhere else, so the fallback below
+  // catches that case and retries without it.
+  const session = await selectSessionForChallenge(sessionId);
 
   if (!session) {
     throw createHttpError(404, "Game session not found.");
   }
+
+  // A challenge link snapshots this game's five locations, so minting one is a
+  // capability that belongs to the player who played it and to nobody else.
+  requirePlayToken(session.play_token_hash ?? null, playToken);
 
   // Only a FINISHED game may be snapshotted, and this is a security boundary
   // rather than tidiness.
@@ -159,8 +217,9 @@ export async function getChallengeRounds(
   return rounds.length > 0 ? rounds : null;
 }
 
-/** Reset the cached availability flag. Test-only. */
+/** Reset the cached availability flags. Test-only. */
 export function resetChallengeStoreState(): void {
   challengesTableAvailable = true;
   hasWarnedAboutMissingTable = false;
+  playTokenColumnPresent = true;
 }

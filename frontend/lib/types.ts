@@ -14,6 +14,14 @@ export type GameMode = "classic" | "daily" | "challenge";
 
 export interface StartGameResponse {
   sessionId: string;
+  /**
+   * Proof that this game is ours, sent back on every subsequent call for it.
+   *
+   * Optional because a backend that predates the feature does not send one, and
+   * because it must survive being absent: the routes grandfather a session with
+   * no token rather than refusing it.
+   */
+  playToken?: string | null;
   username: string;
   currentRound: number;
   totalRounds: number;

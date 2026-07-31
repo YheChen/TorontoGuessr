@@ -197,10 +197,17 @@ export function SaveProgress({
           <ShieldCheck className="size-4 text-success" />
           <h3 className="text-sm font-semibold">Progress is being saved</h3>
         </div>
+        {/* Says what is actually true. profiles.current_streak is read in six
+            places and written in none, so it is 0 for every account, and this
+            card previously told signed-in players "Your streak is stored on your
+            account" when the streak lives in localStorage and is lost with their
+            browser data. The name and the games are genuinely on the account; the
+            streak is not yet. Overstating it would stop someone worrying about
+            the one browser still holding their only copy. */}
         <p className="mt-2 text-xs text-muted-foreground">
           {profile?.currentStreak
             ? `Your ${profile.currentStreak} day streak is stored on your account.`
-            : "Your streak is stored on your account."}
+            : "Your name and finished games are stored on your account. Your streak still lives in this browser only."}
         </p>
 
         <div className="mt-4">
