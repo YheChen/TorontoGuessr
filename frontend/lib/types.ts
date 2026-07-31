@@ -168,6 +168,20 @@ export interface Profile {
   lastPlayedDate: string | null;
 }
 
+/** One finished game filed under this account. */
+export interface GameHistoryEntry {
+  sessionId: string;
+  totalScore: number;
+  roundsPlayed: number;
+  completedAt: string | null;
+  mode: GameMode;
+}
+
+export interface GameHistoryResponse {
+  entries: GameHistoryEntry[];
+  hasNextPage: boolean;
+}
+
 export type LocationReviewStatus = "pending" | "rejected" | "accepted";
 
 export interface LocationReviewEntry {
