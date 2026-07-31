@@ -4,6 +4,7 @@ import type {
   CreateChallengeResponse,
   CreateLobbyResponse,
   DeleteRejectedLocationsResponse,
+  GameHistoryResponse,
   GameMode,
   GameStatsResponse,
   GuessLocation,
@@ -253,6 +254,32 @@ export function updateDisplayName(displayName: string) {
   return request<{ profile: Profile }>(
     "/me",
     { method: "PATCH", body: JSON.stringify({ displayName }) },
+    { authenticated: true }
+  );
+}
+
+/** This account's finished games, newest first. */
+export function fetchGameHistory({
+  page = 1,
+  limit = 20,
+}: { page?: number; limit?: number } = {}) {
+  return request<GameHistoryResponse>(
+    `/me/games?page=${page}&limit=${limit}`,
+    { cache: "no-store" },
+    { authenticated: true }
+  );
+}
+
+/**
+ * Carry a streak earned before the account existed onto the account.
+ *
+ * Only ever raises the stored best. The current streak stays derived from played
+ * games on the server, so this cannot be used to claim one.
+ */
+export function importStreakBest(bestStreak: number) {
+  return request<{ profile: Profile }>(
+    "/me/streak",
+    { method: "POST", body: JSON.stringify({ bestStreak }) },
     { authenticated: true }
   );
 }

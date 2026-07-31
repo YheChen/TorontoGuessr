@@ -53,7 +53,12 @@ import { checkRateLimit, clientIp } from "./rate-limit.js";
 import { requireAdminToken } from "./admin-auth.js";
 import { readPlayToken } from "./play-token.js";
 import { optionalUser, requireUser } from "./auth.js";
-import { getOrCreateProfile, setDisplayName } from "./profile-store.js";
+import {
+  getGameHistory,
+  getOrCreateProfile,
+  importStreakBest,
+  setDisplayName,
+} from "./profile-store.js";
 
 /**
  * A guessed point on Earth.
@@ -143,6 +148,18 @@ function requireLobbyCode(rawCode: string): string {
 
 const displayNameSchema = z.object({
   displayName: z.string().max(64).optional(),
+});
+
+const historyQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+// Bounded at the edge as well as clamped in importStreakBest, so an absurd value
+// is refused rather than quietly reduced. 10000 is far past any real streak and
+// well inside the integer column.
+const streakImportSchema = z.object({
+  bestStreak: z.number().int().min(0).max(10_000),
 });
 
 const gameStatsQuerySchema = z.object({
@@ -560,6 +577,39 @@ export async function routeRequest(
     if (request.method === "GET" && pathname === "/me") {
       sendJson(response, 200, {
         profile: await getOrCreateProfile(await requireUser(request)),
+      });
+      return;
+    }
+
+    if (request.method === "GET" && pathname === "/me/games") {
+      const user = await requireUser(request);
+      const query = historyQuerySchema.parse({
+        page: url.searchParams.get("page") ?? undefined,
+        limit: url.searchParams.get("limit") ?? undefined,
+      });
+
+      sendJson(response, 200, await getGameHistory(user.userId, query));
+      return;
+    }
+
+    // A one-time carry of a streak earned before the account existed. Only ever
+    // raises `best`, and is clamped to the days the game has been open; `current`
+    // stays derived from played games and cannot be set from here.
+    if (request.method === "POST" && pathname === "/me/streak") {
+      const rateLimit = checkRateLimit(`streak-import:${clientIp(request)}`, {
+        limit: 10,
+        windowMs: 60_000,
+      });
+      if (!rateLimit.allowed) {
+        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+        sendError(response, 429, "Too many updates. Please wait a moment.");
+        return;
+      }
+
+      const user = await requireUser(request);
+      const body = streakImportSchema.parse(await readBody(request));
+      sendJson(response, 200, {
+        profile: await importStreakBest(user, body.bestStreak),
       });
       return;
     }

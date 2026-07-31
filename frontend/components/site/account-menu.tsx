@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LogOut, Mail, User as UserIcon } from "lucide-react";
+import Link from "next/link";
+import { History, LogOut, Mail, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -189,6 +190,12 @@ export function AccountMenu() {
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/me">
+                <History className="size-4" />
+                Streak and games
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={(event) => {
                 if (!signOutIsDestructive) {

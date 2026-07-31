@@ -15,6 +15,7 @@ import {
   hashPlayToken,
   requirePlayToken,
 } from "./play-token.js";
+import { syncStreak } from "./profile-store.js";
 import {
   createGuestUsername,
   resolveDefaultUsername,
@@ -509,7 +510,16 @@ async function attributeFinishedGame(
       `[game-store] could not attribute session ${sessionId} to an account ` +
         `(apply link_game_sessions_to_accounts.sql if user_id is missing): ${message}`
     );
+    // Attribution failed, so there is nothing new for the streak to see.
+    return;
   }
+
+  // The streak is derived from attributed games, so the only moment it can change
+  // is right after one is attributed. Recomputing here rather than on /me keeps
+  // the read path a single query. syncStreak swallows its own failures for the
+  // same reason this function does: a scored guess must not be lost to
+  // bookkeeping.
+  await syncStreak(userId);
 }
 
 export async function submitGuess(
