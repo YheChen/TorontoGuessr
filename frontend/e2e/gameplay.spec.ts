@@ -180,6 +180,14 @@ test.describe("a round of play", () => {
     // API keeps answering 200, so the existing curl smoke test would not notice.
     // Checked before anything else, because every assertion after it depends on
     // Maps working and would otherwise fail for a misleading reason.
+    //
+    // The wait is not padding. Google paints its own error banner a beat after
+    // the container mounts, and toHaveCount(0) passes the instant the text is
+    // absent, so without it this raced: some runs sailed past a map that was
+    // already dead and then failed several steps later with an unrelated-looking
+    // message. Confirmed by reading the console, which says
+    // RefererNotAllowedMapError.
+    await page.waitForTimeout(2_000);
     await expect(
       page.getByText(MAPS_FAILURE),
       "Google Maps refused to load"
