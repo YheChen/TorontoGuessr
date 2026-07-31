@@ -2,6 +2,7 @@
 
 import { Check, Crown, Hourglass, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDistance } from "@/lib/format-distance";
 import { playerColor, rankPlayers } from "@/lib/lobby-client";
 import type { LobbyPlayerState } from "@/lib/types";
 
@@ -15,12 +16,6 @@ interface LobbyScoreboardProps {
   showRoundDetail: boolean;
   /** Before a reveal, show who has locked in a guess. */
   showGuessStatus: boolean;
-}
-
-function formatDistance(distance: number | null | undefined): string {
-  if (distance === null || distance === undefined) return "No guess";
-  if (distance < 1) return `${Math.round(distance * 1000)} m`;
-  return `${distance.toFixed(2)} km`;
 }
 
 export function LobbyScoreboard({

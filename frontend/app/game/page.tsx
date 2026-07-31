@@ -30,6 +30,7 @@ import {
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
 import { parseGameParams } from "@/lib/game-params";
+import { formatDistance } from "@/lib/format-distance";
 import { toLeaderboardName } from "@/lib/leaderboard-name";
 import { recordPlayedToday, type StreakState } from "@/lib/streak";
 import { ShareResults } from "@/components/share-results";
@@ -346,6 +347,9 @@ export default function Game() {
   const mapActualLocation = isPlaying
     ? null
     : (currentResult?.actualLocation ?? null);
+  // Only while a result is on screen. During play there is no line to label and
+  // no answer to be a distance from.
+  const mapDistanceKm = isPlaying ? null : (currentResult?.distance ?? null);
 
   return (
     <>
@@ -491,6 +495,7 @@ export default function Game() {
                     onMapClick={handleMapClick}
                     guessLocation={mapGuessLocation}
                     actualLocation={mapActualLocation}
+                    guessDistanceKm={mapDistanceKm}
                     isGuessing={isPlaying}
                     viewResetKey={currentRound}
                   />
@@ -620,11 +625,7 @@ export default function Game() {
                             {round.score.toLocaleString("en-US")}
                           </span>
                           <span className="block text-xs text-muted-foreground">
-                            {round.distance === null
-                              ? "No guess"
-                              : round.distance < 1
-                                ? `${Math.round(round.distance * 1000)} m`
-                                : `${round.distance.toFixed(2)} km`}
+                            {formatDistance(round.distance)}
                           </span>
                         </span>
                       </li>

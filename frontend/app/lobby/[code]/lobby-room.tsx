@@ -238,6 +238,7 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
         label: player.displayName,
         location: player.guessLocation as GuessLocation,
         color: playerColor(colorIndex.get(player.playerId) ?? 0),
+        distanceKm: player.roundDistance ?? null,
       }));
   }, [state, colorIndex]);
 
@@ -349,6 +350,10 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
     : secondsUntil(state.roundDeadlineAt, state.serverTime, elapsed);
   const progress = guessProgress(state.players);
   const isHost = state.you.isHost;
+  // One source of truth for "there is nothing after this round", used by both the
+  // host's button and the countdown everyone else sees. They disagreed before:
+  // the button said "See final scores" while the countdown promised a next round.
+  const isLastRound = state.currentRound >= state.totalRounds;
   const maxTotal = state.totalRounds * MAX_ROUND_SCORE;
   const winner = [...state.players].sort(
     (a, b) => b.totalScore - a.totalScore,
@@ -552,13 +557,17 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
                     size="lg"
                     className="mt-5 w-full rounded-xl shadow-glow"
                   >
-                    {state.currentRound >= state.totalRounds
-                      ? "See final scores"
-                      : "Next round"}
+                    {isLastRound ? "See final scores" : "Next round"}
                   </Button>
                 ) : (
                   <p className="mt-5 text-center text-xs text-muted-foreground">
-                    Next round in {secondsLeft}s
+                    {/* Matches the host's button, which already says "See final
+                        scores" here. After the last round the timer is not
+                        counting toward another round, it is counting toward the
+                        final scoreboard, and saying otherwise promises a sixth
+                        round that never comes. */}
+                    {isLastRound ? "Show results in" : "Next round in"}{" "}
+                    {secondsLeft}s
                   </p>
                 )}
               </>

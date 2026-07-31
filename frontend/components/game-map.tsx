@@ -5,11 +5,15 @@ import {
   useJsApiLoader,
   GoogleMap,
   MarkerF,
+  OverlayView,
+  OverlayViewF,
   PolylineF,
 } from "@react-google-maps/api";
 import { Sun, Moon } from "lucide-react";
 import { Spinner } from "@/components/site/spinner";
 import { useMapTheme } from "@/components/site/map-theme";
+import { formatDistanceCompact } from "@/lib/format-distance";
+import { midpoint } from "@/lib/map-geometry";
 
 interface LatLng {
   lat: number;
@@ -22,6 +26,13 @@ export interface GuessPin {
   label: string;
   location: LatLng;
   color: string;
+  /**
+   * How far this pin was from the answer, in km, for the label on its line.
+   * The server's number, not one recomputed here: it is what the round was
+   * scored from, and a locally recomputed value could disagree with the score
+   * shown beside it.
+   */
+  distanceKm?: number | null;
 }
 
 interface GameMapProps {
@@ -43,6 +54,11 @@ interface GameMapProps {
    * nothing and behaves exactly as before.
    */
   guessPins?: GuessPin[];
+  /**
+   * Distance in km for the single-player guess line, from the server's scored
+   * result. Omitted while guessing, when there is no line and no answer yet.
+   */
+  guessDistanceKm?: number | null;
 }
 
 const centerToronto: LatLng = { lat: 43.6532, lng: -79.3832 };
@@ -77,6 +93,11 @@ const MAP_STYLE_DARK: google.maps.MapTypeStyle[] = [
   { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#2a3550" }] },
 ];
 
+/** Centres an overlay on its anchor point rather than hanging it below-right. */
+function centerOverlay(width: number, height: number) {
+  return { x: -(width / 2), y: -(height / 2) };
+}
+
 export function GameMap({
   onMapClick,
   guessLocation,
@@ -85,6 +106,7 @@ export function GameMap({
   className,
   viewResetKey,
   guessPins,
+  guessDistanceKm,
 }: GameMapProps) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
@@ -100,6 +122,11 @@ export function GameMap({
   const actualPin = useMemo(
     () => pinDataUri(isDark ? ACTUAL_PIN_HEX.dark : ACTUAL_PIN_HEX.light),
     [isDark],
+  );
+
+  const guessDistanceLabel = useMemo(
+    () => formatDistanceCompact(guessDistanceKm),
+    [guessDistanceKm],
   );
 
   const onLoad = useCallback((map: google.maps.Map) => {
@@ -224,6 +251,21 @@ export function GameMap({
           />
         )}
 
+        {/* How far off the guess was, written on its own line. The card beside
+            the map says the same number, but reading it there means looking away
+            from the two pins you are comparing. */}
+        {guessLocation && actualLocation && guessDistanceLabel && (
+          <OverlayViewF
+            position={midpoint(guessLocation, actualLocation)}
+            mapPaneName={OverlayView.FLOAT_PANE}
+            getPixelPositionOffset={centerOverlay}
+          >
+            <span className="pointer-events-none select-none whitespace-nowrap rounded-full bg-card/95 px-2 py-0.5 text-[11px] font-semibold tabular text-foreground shadow-soft ring-1 ring-border/70 backdrop-blur">
+              {guessDistanceLabel}
+            </span>
+          </OverlayViewF>
+        )}
+
         {/* Lobby reveal: one pin per player, each tied to the answer. */}
         {(guessPins ?? []).map((pin) => (
           <MarkerF
@@ -249,6 +291,42 @@ export function GameMap({
               }}
             />
           ))}
+
+        {/* One distance per player, on their own line and in their own colour,
+            so a reveal can be read without cross-referencing the scoreboard.
+            Several of these can sit close together when players guessed near
+            each other; the midpoint placement spreads them along lines that
+            radiate from the answer, which is the best available separation
+            without measuring rendered label boxes. */}
+        {actualLocation &&
+          (guessPins ?? []).map((pin) => {
+            const label = formatDistanceCompact(pin.distanceKm);
+            if (!label) return null;
+            return (
+              <OverlayViewF
+                key={`label-${pin.id}`}
+                position={midpoint(pin.location, actualLocation)}
+                mapPaneName={OverlayView.FLOAT_PANE}
+                getPixelPositionOffset={centerOverlay}
+              >
+                <span
+                  // The player's colour is the BORDER, not the text. Two reasons.
+                  // ring-1 would have ignored an inline borderColor entirely,
+                  // since Tailwind rings read --tw-ring-color. And four of the
+                  // eight lobby colours (amber, green, lime, cyan at 600) fall
+                  // below 4.5:1 against both card backgrounds, so colouring 11px
+                  // text with them would be unreadable for some players and
+                  // unreadable in dark mode for more. A 2px band gives the same
+                  // association with none of that.
+                  className="pointer-events-none select-none whitespace-nowrap rounded-full border-2 bg-card/95 px-2 py-0.5 text-[11px] font-semibold tabular text-foreground shadow-soft backdrop-blur"
+                  style={{ borderColor: pin.color }}
+                  title={pin.label}
+                >
+                  {label}
+                </span>
+              </OverlayViewF>
+            );
+          })}
       </GoogleMap>
 
       <button

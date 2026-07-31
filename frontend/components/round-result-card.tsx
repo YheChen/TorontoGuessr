@@ -14,6 +14,7 @@ import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CountUp } from "@/components/site/count-up";
 import { cn } from "@/lib/utils";
+import { formatDistance } from "@/lib/format-distance";
 
 interface RoundResultCardProps {
   guessLocation: { lat: number; lng: number } | null;
@@ -65,12 +66,6 @@ function getVerdict(score: number, hasGuess: boolean): Verdict {
     icon: MapPin,
     tone: "text-muted-foreground bg-muted ring-border",
   };
-}
-
-function formatDistance(distance: number | null): string {
-  if (distance === null) return "No guess";
-  if (distance < 1) return `${Math.round(distance * 1000)} m`;
-  return `${distance.toFixed(2)} km`;
 }
 
 /**
