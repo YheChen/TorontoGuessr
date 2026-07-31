@@ -351,7 +351,10 @@ export default function Game() {
     <>
       {/* ── In-game stage: one persistent map shared by guessing and results ── */}
       {inStage && (
-        <section className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-4 lg:px-6">
+        <section
+          data-testid="game-stage"
+          className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-4 lg:px-6"
+        >
           {inResults && currentResult?.nextRound && (
             <PanoPrefetch panoId={currentResult.nextRound.round.panoId} />
           )}
@@ -418,7 +421,10 @@ export default function Game() {
             </div>
 
             {/* Result card: grid column one during results */}
-            <div className={cn("mt-3 lg:mt-0", !inResults && "hidden")}>
+            <div
+              data-testid="round-result"
+              className={cn("mt-3 lg:mt-0", !inResults && "hidden")}
+            >
               {inResults && currentResult && (
                 <RoundResultCard
                   guessLocation={currentResult.guessLocation}
@@ -493,6 +499,7 @@ export default function Game() {
                 {/* Submit (guessing only) */}
                 <div className={cn("px-2.5 pb-2.5", inResults && "hidden")}>
                   <Button
+                    data-testid="submit-guess"
                     onClick={() => void handleSubmitGuess()}
                     disabled={!guessLocation || gameState === "submitting"}
                     size="lg"

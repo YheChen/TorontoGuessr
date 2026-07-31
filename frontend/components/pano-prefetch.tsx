@@ -45,6 +45,9 @@ export function PanoPrefetch({ panoId }: { panoId: string }) {
     // does.
     <div
       aria-hidden="true"
+      // The e2e suite asserts this box stays off screen. jsdom computes no
+      // layout, so a real browser is the only place the regression is visible.
+      data-testid="pano-prefetch"
       className="pointer-events-none fixed left-[-9999px] top-0 h-64 w-64"
     >
       <div ref={containerRef} className="h-full w-full" />

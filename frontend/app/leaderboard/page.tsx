@@ -332,6 +332,7 @@ export default function Leaderboard() {
                   return (
                     <li
                       key={entry.id}
+                      data-testid="leaderboard-row"
                       className="group flex animate-fade-up items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/50 px-4 py-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-accent/40 sm:px-5"
                       style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
                     >
