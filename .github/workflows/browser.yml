@@ -35,14 +35,19 @@ jobs:
   browser:
     name: Browser checks
     # Only successful FRONTEND deployments. Both Vercel projects report here, and
-    # the backend has no pages to look at. Preview deployments are skipped unless
-    # a bypass secret exists, since without one they answer 302.
+    # the backend has no pages to look at.
+    #
+    # NO `secrets` REFERENCE HERE. The first version of this condition also
+    # checked secrets.VERCEL_AUTOMATION_BYPASS_SECRET != '', which is not allowed:
+    # the secrets context does not exist in a job-level if, and using it makes the
+    # whole workflow FILE invalid. GitHub does not report that as a failing check,
+    # it reports a run with zero jobs, so the workflow simply never ran and nothing
+    # said why. The preview-versus-production decision moved into the Resolve step
+    # below, where secrets are available.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.deployment_status.state == 'success' &&
-       !contains(github.event.deployment.environment, 'backend') &&
-       (github.event.deployment.environment == 'Production – toronto-guessr' ||
-        secrets.VERCEL_AUTOMATION_BYPASS_SECRET != ''))
+       !contains(github.event.deployment.environment, 'backend'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -57,19 +62,36 @@ jobs:
         env:
           DISPATCH_URL: ${{ inputs.base_url }}
           DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+          ENVIRONMENT: ${{ github.event.deployment.environment }}
+          # Readable here, unlike in a job-level if.
+          BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           url="${DISPATCH_URL:-$DEPLOY_URL}"
           url="${url:-https://www.torontoguessr.ca}"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Testing $url"
+
+          # A preview deployment answers 302 to vercel.com/sso-api without the
+          # project's automation bypass secret, so every check would fail for a
+          # reason that is not about this repo. Skipped rather than failed, and
+          # said out loud so a silent skip is not mistaken for a pass.
+          if [ "$GITHUB_EVENT_NAME" = "deployment_status" ] \
+             && ! printf '%s' "$ENVIRONMENT" | grep -qi '^production' \
+             && [ -z "$BYPASS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipped: $ENVIRONMENT is a preview and VERCEL_AUTOMATION_BYPASS_SECRET is not set, so the URL would answer 302. Add that secret to check previews before merge."
+          else
+            echo "Testing $url"
+          fi
 
       # Only chromium. A second engine would double the runtime to re-check
       # geometry that is not engine specific.
       - name: Install Chromium
+        if: steps.target.outputs.skip != 'true'
         run: npx playwright install --with-deps chromium
         working-directory: frontend
 
       - name: Run browser checks
+        if: steps.target.outputs.skip != 'true'
         run: npm run e2e
         working-directory: frontend
         env:
