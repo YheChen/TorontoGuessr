@@ -92,7 +92,11 @@ export default function GamePanorama({
   }, [panoId, heading, pitch, zoom]);
 
   return (
-    <div className="relative h-full min-h-[320px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60">
+    <div
+      data-testid="game-panorama"
+      data-loaded={loaded ? "true" : "false"}
+      className="relative h-full min-h-[320px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60"
+    >
       {(!isLoaded || !loaded) && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 text-white backdrop-blur-sm">
           <Spinner size={32} />

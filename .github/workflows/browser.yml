@@ -1,0 +1,89 @@
+name: Browser checks
+
+# Real-browser checks against a DEPLOYED site. Separate from ci.yml on purpose:
+# ci.yml must stay fast and hermetic, while this needs a deployment to exist and
+# talks to Google Maps over the network.
+#
+# WHY IT RUNS AFTER DEPLOY RATHER THAN ON THE PR. Two reasons, both hard:
+#   * The Google Maps key is referrer-restricted, so a localhost build renders the
+#     map containers and then Maps refuses; no pin can be placed and most of the
+#     suite is untestable. The e2e config documents this.
+#   * Vercel preview deployments sit behind SSO, so a preview URL answers 302 to
+#     vercel.com/sso-api. Reaching one needs the project's automation bypass
+#     secret, which is not configured. Add VERCEL_AUTOMATION_BYPASS_SECRET as a
+#     repository secret and this workflow will start checking previews too, before
+#     merge, which is strictly better than after.
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Deployment to test (defaults to production)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight run: each one starts a real game, and killing it
+# midway leaves a session in a stranger state than letting it finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  browser:
+    name: Browser checks
+    # Only successful FRONTEND deployments. Both Vercel projects report here, and
+    # the backend has no pages to look at. Preview deployments are skipped unless
+    # a bypass secret exists, since without one they answer 302.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       !contains(github.event.deployment.environment, 'backend') &&
+       (github.event.deployment.environment == 'Production – toronto-guessr' ||
+        secrets.VERCEL_AUTOMATION_BYPASS_SECRET != ''))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Resolve the target
+        id: target
+        env:
+          DISPATCH_URL: ${{ inputs.base_url }}
+          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          url="${DISPATCH_URL:-$DEPLOY_URL}"
+          url="${url:-https://www.torontoguessr.ca}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Testing $url"
+
+      # Only chromium. A second engine would double the runtime to re-check
+      # geometry that is not engine specific.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Run browser checks
+        run: npm run e2e
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: ${{ steps.target.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+      # Traces and screenshots are the whole value of a failed layout run: the
+      # numbers are in the report and the screenshot shows what it looked like.
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14

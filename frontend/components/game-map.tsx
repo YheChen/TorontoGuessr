@@ -160,6 +160,7 @@ export function GameMap({
 
   return (
     <div
+      data-testid="game-map"
       className={`relative h-full w-full overflow-hidden rounded-2xl ring-1 ring-border/70 ${className ?? ""}`}
     >
       <GoogleMap

@@ -32,3 +32,7 @@ next-env.d.ts
 
 # local session handover notes (not part of the app)
 handover.json
+
+# Playwright output
+frontend/playwright-report/
+frontend/test-results/
