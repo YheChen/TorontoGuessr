@@ -6,10 +6,16 @@ loadEnv();
 const rawSupabaseUrl = process.env.SUPABASE_URL ?? null;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
 
-/** PostgREST filter written as an explicit operator, e.g. `{ op: "gte", value: ts }`. */
+/**
+ * PostgREST filter written as an explicit operator, e.g. `{ op: "gte", value: ts }`.
+ *
+ * An array value is for the set operators, `in` above all: formatFilterValue
+ * renders it as `(a,b,c)`, giving `user_id=in.(a,b,c)`. It has always done so;
+ * only the type forbade it, so a set filter had to be cast at every call site.
+ */
 export interface FilterOperator {
   op: string;
-  value: string | number | boolean | null;
+  value: string | number | boolean | null | Array<string | number>;
 }
 
 export type FilterValue =

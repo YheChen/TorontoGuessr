@@ -789,7 +789,81 @@ interface LeaderboardQuery {
 type LeaderboardRecord = Pick<
   GameSessionRecord,
   "id" | "username" | "total_score" | "rounds_played" | "completed_at"
->;
+> & { user_id?: string | null };
+
+const LEADERBOARD_COLUMNS_BASE =
+  "id,username,total_score,rounds_played,completed_at";
+/** With attribution, so a name can be resolved from the account that played. */
+const LEADERBOARD_COLUMNS = `${LEADERBOARD_COLUMNS_BASE},user_id`;
+
+/** Flips to false when game_sessions.user_id is missing (migration not applied). */
+let leaderboardAttributionAvailable = true;
+
+/**
+ * Current display names for the accounts behind a page of leaderboard rows.
+ *
+ * WHY LIVE RATHER THAN STORED. game_sessions.username is a snapshot taken when
+ * the name was saved, so renaming an account never touched its past games and the
+ * board could show one player under several names. Worse, that column holds at
+ * most 10 letters and digits, while a display name allows 16 and underscores, so
+ * two different accounts could both arrive as the same truncated string and be
+ * genuinely indistinguishable on the board. Reading the account's name at request
+ * time fixes both: display names are unique by a case-insensitive index, and
+ * nothing is truncated.
+ *
+ * ONE extra query per page, keyed on at most `limit` ids (25 at the ceiling), so
+ * PostgREST's 1000-row cap is not in play. Never a join, because a join would put
+ * the row count of both tables into one capped response.
+ *
+ * Failure is not fatal. A leaderboard that falls back to the stored names is
+ * still a leaderboard; one that 500s is not.
+ */
+async function resolveAccountNames(
+  records: readonly LeaderboardRecord[]
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (!leaderboardAttributionAvailable) {
+    return names;
+  }
+
+  const userIds = [
+    ...new Set(
+      records
+        .map((record) => record.user_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+    ),
+  ];
+  if (userIds.length === 0) {
+    return names;
+  }
+
+  try {
+    const profiles = await selectRows<{
+      user_id: string;
+      display_name: string | null;
+    }>("profiles", {
+      columns: "user_id,display_name",
+      filters: { user_id: { op: "in", value: userIds } },
+      limit: userIds.length,
+    });
+
+    for (const profile of profiles) {
+      const displayName = profile.display_name?.trim();
+      // An account with no name of its own falls through to the stored guest
+      // name, which is the only name that game has.
+      if (displayName) {
+        names.set(profile.user_id, displayName);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[game-store] could not resolve account names for the leaderboard, using stored names: ${message}`
+    );
+  }
+
+  return names;
+}
 
 export async function getLeaderboard({
   limit = 10,
@@ -820,7 +894,9 @@ export async function getLeaderboard({
   const runQuery = (activeFilters: Filters) =>
     Promise.all([
       selectRows<LeaderboardRecord>(GAME_SESSIONS_TABLE, {
-        columns: "id,username,total_score,rounds_played,completed_at",
+        columns: leaderboardAttributionAvailable
+          ? LEADERBOARD_COLUMNS
+          : LEADERBOARD_COLUMNS_BASE,
         filters: activeFilters,
         order: "total_score.desc,completed_at.asc",
         limit,
@@ -836,7 +912,17 @@ export async function getLeaderboard({
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    if (board === "challenge") {
+    // user_id is only there to look a name up with, so a database without it
+    // serves the board under the stored names instead of failing. Checked before
+    // the branches below, because this error would otherwise be misread as a
+    // missing `mode` column and drop the challenge-game exclusion as well.
+    if (leaderboardAttributionAvailable && message.includes("user_id")) {
+      leaderboardAttributionAvailable = false;
+      console.warn(
+        `[game-store] game_sessions.user_id missing; run link_game_sessions_to_accounts.sql. Leaderboard names come from the stored snapshot until then: ${message}`
+      );
+      [records, total] = await runQuery(filters);
+    } else if (board === "challenge") {
       // Challenge board before the mode columns exist: present an empty board
       // rather than failing the page. (PostgREST reports the missing `mode`
       // column obliquely, parsing it as its ordered-set aggregate function.)
@@ -856,9 +942,15 @@ export async function getLeaderboard({
     }
   }
 
+  const accountNames = await resolveAccountNames(records);
+
   const entries = records.map((record) => ({
     id: record.id,
-    username: resolveDefaultUsername(record.username, record.id),
+    // The account's current name wins when there is one, so a rename shows up on
+    // every game the account has played rather than only on games played after it.
+    username:
+      (record.user_id ? accountNames.get(record.user_id) : null) ??
+      resolveDefaultUsername(record.username, record.id),
     totalScore: record.total_score,
     roundsPlayed: record.rounds_played ?? 0,
     completedAt: record.completed_at,
