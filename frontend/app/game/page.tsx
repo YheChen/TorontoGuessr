@@ -65,6 +65,11 @@ function tierBarColor(score: number): string {
 
 export default function Game() {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // Proof that this game is ours, issued once by /games/start and required by
+  // every route that touches the game. Kept in state next to the session id and
+  // always set in the same update, so a render can never pair one game's id with
+  // another game's token.
+  const [playToken, setPlayToken] = useState<string | null>(null);
   const [currentRound, setCurrentRound] = useState(1);
   const [totalRounds, setTotalRounds] = useState(5);
   const [currentRoundData, setCurrentRoundData] = useState<
@@ -112,6 +117,7 @@ export default function Game() {
     setSaveMessage(null);
     setSaveErrorMessage(null);
     setIsSavingScore(false);
+    setPlayToken(null);
     filedNameRef.current = null;
 
     // The mode comes from the URL so links can target it: ?mode=daily for the
@@ -124,6 +130,7 @@ export default function Game() {
     try {
       const game = await startGameRequest(requestedMode, requestedCode);
       setSessionId(game.sessionId);
+      setPlayToken(game.playToken ?? null);
       setSavedUsername(game.username);
       setMode(game.mode ?? requestedMode);
       setChallengeDate(game.challengeDate ?? null);
@@ -180,7 +187,11 @@ export default function Game() {
     setSaveMessage(null);
 
     try {
-      const response = await saveScoreUsername(sessionId, usernameInput);
+      const response = await saveScoreUsername(
+        sessionId,
+        usernameInput,
+        playToken,
+      );
       setSavedUsername(response.saved.username);
       setSaveMessage(`Saved as ${response.saved.username}.`);
     } catch (error) {
@@ -223,7 +234,11 @@ export default function Game() {
     setSaveErrorMessage(null);
 
     try {
-      const response = await saveScoreUsername(sessionId, leaderboardName);
+      const response = await saveScoreUsername(
+        sessionId,
+        leaderboardName,
+        playToken,
+      );
       setSavedUsername(response.saved.username);
       setSaveMessage(`On the leaderboard as ${response.saved.username}.`);
     } catch (error) {
@@ -246,7 +261,7 @@ export default function Game() {
     setErrorMessage(null);
 
     try {
-      const result = await submitGuessRequest(sessionId, guessLocation);
+      const result = await submitGuessRequest(sessionId, guessLocation, playToken);
       setCurrentResult(result);
       setScores((existing) => [...existing, result]);
       setGameState("results");
@@ -274,7 +289,7 @@ export default function Game() {
     // now that the player is actually seeing the round.
     const prefetched = currentResult.nextRound;
     if (prefetched) {
-      void fetchNextRound(sessionId).catch(() => undefined);
+      void fetchNextRound(sessionId, playToken).catch(() => undefined);
       setCurrentRound(prefetched.currentRound);
       setTotalRounds(prefetched.totalRounds);
       setCurrentRoundData(prefetched.round);
@@ -289,7 +304,7 @@ export default function Game() {
     setErrorMessage(null);
 
     try {
-      const response = await fetchNextRound(sessionId);
+      const response = await fetchNextRound(sessionId, playToken);
       if ("gameFinished" in response && response.gameFinished) {
         const summaryResponse = response as SummaryResponse;
         setScores(summaryResponse.summary.rounds);
@@ -693,6 +708,7 @@ export default function Game() {
                 {sessionId && (
                   <ChallengeFriend
                     sessionId={sessionId}
+                    playToken={playToken}
                     totalScore={totalScore}
                     maxScore={maxTotal}
                   />

@@ -51,6 +51,7 @@ import {
 } from "./observability.js";
 import { checkRateLimit, clientIp } from "./rate-limit.js";
 import { requireAdminToken } from "./admin-auth.js";
+import { readPlayToken } from "./play-token.js";
 import { optionalUser, requireUser } from "./auth.js";
 import { getOrCreateProfile, setDisplayName } from "./profile-store.js";
 
@@ -263,14 +264,20 @@ export async function routeRequest(
         rounds = await selectGameRounds(5, seed);
       }
 
-      const session = await createGameSession(rounds, { mode, challengeDate });
-      const payload = await getRoundForClient(session.id);
+      const { session, playToken } = await createGameSession(rounds, {
+        mode,
+        challengeDate,
+      });
+      const payload = await getRoundForClient(session.id, { playToken });
       if (!payload) {
         throw new Error("New game session is missing its first round.");
       }
 
       sendJson(response, 200, {
         sessionId: session.id,
+        // The only time this token is ever sent. Only its hash is stored, so it
+        // cannot be reissued: a client that loses it has lost that game.
+        playToken,
         username: session.username,
         mode: session.mode,
         challengeDate: session.challengeDate,
@@ -291,7 +298,7 @@ export async function routeRequest(
       const result = await submitGuess(
         requireSessionId(guessParams.sessionId),
         parsedBody.guessLocation ?? null,
-        { userId: user?.userId ?? null }
+        { userId: user?.userId ?? null, playToken: readPlayToken(request) }
       );
       sendJson(response, 200, result);
       return;
@@ -307,7 +314,9 @@ export async function routeRequest(
       // and at guess time for every round after (game-store.ts). The prefetched
       // panorama makes the transition near-instant and the 15s grace absorbs the
       // round trip, so nothing legitimate loses time.
-      const nextRound = await getRoundForClient(sessionId);
+      const nextRound = await getRoundForClient(sessionId, {
+        playToken: readPlayToken(request),
+      });
       if (nextRound === null) {
         sendJson(response, 200, {
           gameFinished: true,
@@ -340,7 +349,10 @@ export async function routeRequest(
       sendJson(
         response,
         200,
-        await createChallengeFromSession(requireSessionId(challengeParams.sessionId))
+        await createChallengeFromSession(
+          requireSessionId(challengeParams.sessionId),
+          { playToken: readPlayToken(request) }
+        )
       );
       return;
     }
@@ -350,7 +362,11 @@ export async function routeRequest(
       const parsedBody = usernameSchema.parse(await readBody(request));
       const username = sanitizeUsername(parsedBody.username);
       sendJson(response, 200, {
-        saved: await saveUsername(requireSessionId(usernameParams.sessionId), username),
+        saved: await saveUsername(
+          requireSessionId(usernameParams.sessionId),
+          username,
+          { playToken: readPlayToken(request) }
+        ),
       });
       return;
     }

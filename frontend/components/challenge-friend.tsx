@@ -8,6 +8,8 @@ import { buildChallengeUrl } from "@/lib/game-params";
 
 interface ChallengeFriendProps {
   sessionId: string;
+  /** Proof this game is ours. The backend refuses to snapshot anyone else's. */
+  playToken: string | null;
   totalScore: number;
   maxScore: number;
 }
@@ -18,6 +20,7 @@ interface ChallengeFriendProps {
  */
 export function ChallengeFriend({
   sessionId,
+  playToken,
   totalScore,
   maxScore,
 }: ChallengeFriendProps) {
@@ -30,7 +33,7 @@ export function ChallengeFriend({
     setErrorMessage(null);
 
     try {
-      const { code } = await createChallenge(sessionId);
+      const { code } = await createChallenge(sessionId, playToken);
       const url = buildChallengeUrl(window.location.origin, code);
       const text = [
         `I scored ${totalScore.toLocaleString("en-US")} / ${maxScore.toLocaleString("en-US")} on TorontoGuessr.`,

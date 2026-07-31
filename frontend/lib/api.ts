@@ -94,10 +94,28 @@ export function startGame(
   });
 }
 
+/**
+ * The play token for a game, as a header.
+ *
+ * A header rather than a query parameter so the credential never lands in a URL,
+ * a referrer, or an access log. Omitted entirely when there is no token, which is
+ * what a game started against an older backend looks like; the backend
+ * grandfathers those instead of refusing them.
+ */
+function getPlayHeaders(
+  playToken: string | null | undefined
+): Record<string, string> {
+  return playToken ? { "x-play-token": playToken } : {};
+}
+
 /** Snapshot this game's rounds behind a shareable code. */
-export function createChallenge(sessionId: string) {
+export function createChallenge(
+  sessionId: string,
+  playToken?: string | null
+) {
   return request<CreateChallengeResponse>(`/games/${sessionId}/challenge`, {
     method: "POST",
+    headers: getPlayHeaders(playToken),
   });
 }
 
@@ -110,26 +128,37 @@ export function createChallenge(sessionId: string) {
  * leaderboard publishes session ids, so anything keyed only on a session id
  * would let a signed-in player claim a stranger's finished game.
  */
-export function submitGuess(sessionId: string, guessLocation: GuessLocation | null) {
+export function submitGuess(
+  sessionId: string,
+  guessLocation: GuessLocation | null,
+  playToken?: string | null
+) {
   return request<GuessResponse>(
     `/games/${sessionId}/guess`,
     {
       method: "POST",
+      headers: getPlayHeaders(playToken),
       body: JSON.stringify({ guessLocation }),
     },
     { authenticated: true }
   );
 }
 
-export function fetchNextRound(sessionId: string) {
+export function fetchNextRound(sessionId: string, playToken?: string | null) {
   return request<NextRoundResponse | SummaryResponse>(`/games/${sessionId}/next`, {
     method: "POST",
+    headers: getPlayHeaders(playToken),
   });
 }
 
-export function saveScoreUsername(sessionId: string, username: string) {
+export function saveScoreUsername(
+  sessionId: string,
+  username: string,
+  playToken?: string | null
+) {
   return request<SaveScoreResponse>(`/games/${sessionId}/username`, {
     method: "POST",
+    headers: getPlayHeaders(playToken),
     body: JSON.stringify({ username }),
   });
 }

@@ -19,10 +19,11 @@
 --
 -- ACTIVATION: the backend only calls this when GUESS_RPC_ENABLED=true. It
 -- requires the mode/challenge_date/round_started_at columns (from
--- add_usernames_to_game_sessions / the daily-challenge migration). Apply this,
--- verify with a real game, THEN set the flag. With the flag off the backend
--- uses the original two-call JS path, so applying this migration alone changes
--- nothing.
+-- add_usernames_to_game_sessions / the daily-challenge migration) AND
+-- play_token_hash (from add_play_token_to_game_sessions.sql), so apply that one
+-- first. Apply this, verify with a real game, THEN set the flag. With the flag
+-- off the backend uses the original two-call JS path, so applying this migration
+-- alone changes nothing.
 --
 -- The reference vectors are no longer restated in prose here. Prose goes stale
 -- silently; the assertion block at the end of this file does not.
@@ -84,7 +85,12 @@ $$;
 create or replace function public.submit_guess(
   p_session_id uuid,
   p_guess_lat double precision default null,
-  p_guess_lng double precision default null
+  p_guess_lng double precision default null,
+  -- The sha256 HASH of the caller's play token, not the token. The backend hashes
+  -- it before the call so the plaintext credential never reaches a Postgres log,
+  -- a pg_stat_statements entry, or a query plan. Null means the caller sent no
+  -- token, which is only allowed for a session that has no hash.
+  p_play_token_hash text default null
 )
 returns jsonb
 language plpgsql
@@ -115,6 +121,30 @@ begin
   if not found then
     raise exception 'Game session not found.';
   end if;
+
+  -- The play-token check, and it has to be here rather than in the backend: this
+  -- function exists so the guess path never reads the row into JS, so JS has
+  -- nothing to compare against. Same three-way rule as requirePlayToken in
+  -- backend/src/play-token.ts, and it runs before the status check so a refused
+  -- caller cannot even learn whether the game is over.
+  --
+  -- A null stored hash is grandfathered, for sessions that predate the feature.
+  -- The backfill in add_play_token_to_game_sessions.sql writes an unmatchable
+  -- sentinel over every row old enough for that to be safe.
+  if v_session.play_token_hash is not null then
+    if p_play_token_hash is null then
+      raise exception
+        'This game could not be verified. Reload the page to start a new one.';
+    end if;
+    -- Plain inequality, not a constant-time comparison. Both sides are already
+    -- sha256 digests, so timing can at most leak a digest, and a digest is not a
+    -- credential: the check is over sha256(token), which cannot be inverted.
+    if p_play_token_hash <> v_session.play_token_hash then
+      raise exception
+        'That game belongs to a different player. Reload the page to start your own.';
+    end if;
+  end if;
+
   if v_session.status <> 'in_progress' then
     raise exception 'Game session is already complete.';
   end if;

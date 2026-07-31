@@ -11,6 +11,11 @@ import {
   type Filters,
 } from "./supabase.js";
 import {
+  createPlayToken,
+  hashPlayToken,
+  requirePlayToken,
+} from "./play-token.js";
+import {
   createGuestUsername,
   resolveDefaultUsername,
 } from "./username-utils.js";
@@ -27,9 +32,8 @@ import type {
 export { LEADERBOARD_PERIODS } from "./types.js";
 
 const GAME_SESSIONS_TABLE = "game_sessions";
-const GAME_SESSION_COLUMNS_LEGACY =
+const GAME_SESSION_COLUMNS_BASE =
   "id,username,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
-const GAME_SESSION_COLUMNS_EXTENDED = `${GAME_SESSION_COLUMNS_LEGACY},mode,challenge_date,round_started_at`;
 const DEFAULT_STATS_DAYS = 30;
 const DEFAULT_STATS_TIME_ZONE = "America/Toronto";
 export const ROUND_TIME_LIMIT_SECONDS = 60;
@@ -37,15 +41,59 @@ export const ROUND_TIME_LIMIT_SECONDS = 60;
 // before a guess is treated as a timeout.
 const ROUND_DEADLINE_GRACE_SECONDS = 15;
 
-// Flips to false when the mode/deadline columns are missing (migration not
-// applied yet); all session operations then degrade to the legacy schema.
-let sessionSchemaExtended = true;
-let hasWarnedAboutLegacySchema = false;
+/**
+ * Optional column groups, each added by its own migration.
+ *
+ * Every group starts assumed-present and is switched off for the life of the warm
+ * instance the first time PostgREST says one of its columns does not exist. So a
+ * migration that has not been applied yet degrades one feature instead of failing
+ * every request.
+ *
+ * These are tracked SEPARATELY, one flag per migration, and that matters. The
+ * previous version of this was a single boolean over one combined column list, so
+ * adding a column to it meant a missing column in the newer migration also
+ * disabled the older one: applying add_game_modes_and_deadlines.sql but not
+ * add_play_token_to_game_sessions.sql would have silently turned off round
+ * deadlines and daily challenges. Per-group probing is what makes it safe to add
+ * a column here at all.
+ */
+const OPTIONAL_COLUMN_GROUPS = {
+  /** add_game_modes_and_deadlines.sql */
+  modes: {
+    columns: ["mode", "challenge_date", "round_started_at"],
+    warning:
+      "[game-store] mode/round_started_at columns missing; run add_game_modes_and_deadlines.sql. Deadlines and daily challenges are disabled until then.",
+  },
+  /** add_play_token_to_game_sessions.sql */
+  playToken: {
+    columns: ["play_token_hash"],
+    warning:
+      "[game-store] play_token_hash column missing; run add_play_token_to_game_sessions.sql. Games cannot be tied to the player who started them until then, so anyone with a session id can rename its leaderboard entry.",
+  },
+} as const;
 
-function sessionColumns(): string {
-  return sessionSchemaExtended
-    ? GAME_SESSION_COLUMNS_EXTENDED
-    : GAME_SESSION_COLUMNS_LEGACY;
+type ColumnGroup = keyof typeof OPTIONAL_COLUMN_GROUPS;
+
+const GROUP_NAMES = Object.keys(OPTIONAL_COLUMN_GROUPS) as ColumnGroup[];
+
+/** Which optional groups this instance still believes exist. */
+type SessionSchema = Record<ColumnGroup, boolean>;
+
+const sessionSchema: SessionSchema = {
+  modes: true,
+  playToken: true,
+};
+const warnedGroups = new Set<ColumnGroup>();
+
+function currentSchema(): SessionSchema {
+  return { ...sessionSchema };
+}
+
+function sessionColumns(schema: SessionSchema = currentSchema()): string {
+  const optional = GROUP_NAMES.filter((name) => schema[name]).flatMap(
+    (name) => OPTIONAL_COLUMN_GROUPS[name].columns
+  );
+  return [GAME_SESSION_COLUMNS_BASE, ...optional].join(",");
 }
 
 function isMissingColumnError(error: unknown): boolean {
@@ -57,32 +105,73 @@ function isMissingColumnError(error: unknown): boolean {
   );
 }
 
-/** Run a session operation, retrying with the legacy schema when the new
- *  columns are missing. */
-async function withSessionSchemaFallback<T>(
-  operation: () => Promise<T>,
-  legacyOperation: () => Promise<T>
+/**
+ * Switch off the optional groups a missing-column error blames, and report
+ * whether anything changed.
+ *
+ * PostgREST names the offending column in both wordings it uses, so the group can
+ * usually be identified exactly. When it names none of them (an unrecognised
+ * wording, or a column from a group already switched off) nothing is disabled and
+ * the caller rethrows, rather than disabling everything on a guess.
+ */
+function degradeSessionSchema(error: unknown): boolean {
+  if (!isMissingColumnError(error) || !(error instanceof Error)) {
+    return false;
+  }
+
+  let degraded = false;
+  for (const name of GROUP_NAMES) {
+    const group = OPTIONAL_COLUMN_GROUPS[name];
+    const blamed = group.columns.some((column) =>
+      error.message.includes(column)
+    );
+    if (!sessionSchema[name] || !blamed) {
+      continue;
+    }
+
+    sessionSchema[name] = false;
+    degraded = true;
+    if (!warnedGroups.has(name)) {
+      warnedGroups.add(name);
+      console.warn(group.warning);
+    }
+  }
+
+  return degraded;
+}
+
+/**
+ * Run a session operation, retrying with fewer optional columns each time one
+ * turns out to be missing.
+ *
+ * The callback receives the schema to build its columns AND its payload from,
+ * because inserts and updates have to leave a missing column out of the body too,
+ * not just out of the select.
+ */
+async function withSessionSchema<T>(
+  operation: (schema: SessionSchema) => Promise<T>
 ): Promise<T> {
-  if (!sessionSchemaExtended) {
-    return legacyOperation();
+  // One attempt per group, plus the first: enough to shed every optional group
+  // one at a time, and bounded so a persistent error cannot loop.
+  for (let attempt = 0; attempt <= GROUP_NAMES.length; attempt += 1) {
+    try {
+      return await operation(currentSchema());
+    } catch (error) {
+      if (!degradeSessionSchema(error)) {
+        throw error;
+      }
+    }
   }
 
-  try {
-    return await operation();
-  } catch (error) {
-    if (!isMissingColumnError(error)) {
-      throw error;
-    }
+  return operation(currentSchema());
+}
 
-    sessionSchemaExtended = false;
-    if (!hasWarnedAboutLegacySchema) {
-      hasWarnedAboutLegacySchema = true;
-      console.warn(
-        "[game-store] mode/round_started_at columns missing; run add_game_modes_and_deadlines.sql. Deadlines and daily challenges are disabled until then."
-      );
-    }
-    return legacyOperation();
+/** Reset the cached schema probing. Test-only. */
+export function resetGameStoreSchemaState(): void {
+  for (const name of GROUP_NAMES) {
+    sessionSchema[name] = true;
   }
+  warnedGroups.clear();
 }
 
 interface RoundPayload {
@@ -90,6 +179,18 @@ interface RoundPayload {
   totalRounds: number;
   round: Pick<GameRound, "panoId" | "heading" | "pitch" | "zoom">;
   timeLimit: number;
+}
+
+/**
+ * The caller's play token, if they sent one.
+ *
+ * Always an options object rather than a positional argument. Every route that
+ * takes one also takes a session id, and both are opaque strings, so positional
+ * arguments could be transposed at a call site and the guard would compare a
+ * session id against a hash and refuse every request.
+ */
+interface PlayTokenOption {
+  playToken?: string | null;
 }
 
 interface DailyStatsEntry {
@@ -148,12 +249,13 @@ function mapSessionRecord(record: GameSessionRecord): GameSession {
     mode: record.mode ?? "classic",
     challengeDate: record.challenge_date ?? null,
     roundStartedAt: record.round_started_at ?? null,
+    playTokenHash: record.play_token_hash ?? null,
   };
 }
 
 function buildSessionInsert(
   session: GameSession,
-  { extended }: { extended: boolean }
+  schema: SessionSchema
 ): Record<string, unknown> {
   const base: Record<string, unknown> = {
     id: session.id,
@@ -169,10 +271,14 @@ function buildSessionInsert(
     completed_at: session.completedAt,
   };
 
-  if (extended) {
+  if (schema.modes) {
     base.mode = session.mode;
     base.challenge_date = session.challengeDate;
     base.round_started_at = session.roundStartedAt;
+  }
+
+  if (schema.playToken) {
+    base.play_token_hash = session.playTokenHash;
   }
 
   return base;
@@ -247,16 +353,11 @@ function createDailySeries(days: number, timeZone: string): DailyStatsEntry[] {
 }
 
 async function requireGameSession(sessionId: string): Promise<GameSession> {
-  const fetchWithColumns = async (columns: string) => {
-    return selectSingleRow<GameSessionRecord>(GAME_SESSIONS_TABLE, {
-      columns,
+  const record = await withSessionSchema((schema) =>
+    selectSingleRow<GameSessionRecord>(GAME_SESSIONS_TABLE, {
+      columns: sessionColumns(schema),
       filters: { id: sessionId },
-    });
-  };
-
-  const record = await withSessionSchemaFallback(
-    () => fetchWithColumns(GAME_SESSION_COLUMNS_EXTENDED),
-    () => fetchWithColumns(GAME_SESSION_COLUMNS_LEGACY)
+    })
   );
 
   if (!record) {
@@ -271,10 +372,18 @@ interface CreateGameSessionOptions {
   challengeDate?: string | null;
 }
 
+/**
+ * A new game, plus the one and only copy of its play token.
+ *
+ * The token is returned rather than stored in the session model because only its
+ * hash is persisted, and this is the single moment the plaintext exists. The
+ * caller has to hand it to the player now or it is gone.
+ */
 export async function createGameSession(
   rounds: GameRound[],
   { mode = "classic", challengeDate = null }: CreateGameSessionOptions = {}
-): Promise<GameSession> {
+): Promise<{ session: GameSession; playToken: string }> {
+  const playToken = createPlayToken();
   const session: GameSession = {
     id: randomUUID(),
     username: createGuestUsername(),
@@ -290,24 +399,18 @@ export async function createGameSession(
     mode,
     challengeDate: mode === "daily" ? challengeDate : null,
     roundStartedAt: new Date().toISOString(),
+    playTokenHash: hashPlayToken(playToken),
   };
 
-  const record = await withSessionSchemaFallback(
-    () =>
-      insertRow<GameSessionRecord>(
-        GAME_SESSIONS_TABLE,
-        buildSessionInsert(session, { extended: true }),
-        { columns: GAME_SESSION_COLUMNS_EXTENDED }
-      ),
-    () =>
-      insertRow<GameSessionRecord>(
-        GAME_SESSIONS_TABLE,
-        buildSessionInsert(session, { extended: false }),
-        { columns: GAME_SESSION_COLUMNS_LEGACY }
-      )
+  const record = await withSessionSchema((schema) =>
+    insertRow<GameSessionRecord>(
+      GAME_SESSIONS_TABLE,
+      buildSessionInsert(session, schema),
+      { columns: sessionColumns(schema) }
+    )
   );
 
-  return mapSessionRecord(record);
+  return { session: mapSessionRecord(record), playToken };
 }
 
 /**
@@ -322,9 +425,12 @@ export async function createGameSession(
  * after, which is sufficient.
  */
 export async function getRoundForClient(
-  sessionId: string
+  sessionId: string,
+  { playToken = null }: PlayTokenOption = {}
 ): Promise<RoundPayload | null> {
   const session = await requireGameSession(sessionId);
+  requirePlayToken(session.playTokenHash, playToken);
+
   if (session.status !== "in_progress") {
     return null;
   }
@@ -411,7 +517,10 @@ export async function submitGuess(
   guessLocation: LatLng | null = null,
   // An options object rather than a third positional, so two nullable arguments
   // cannot be transposed at a call site.
-  { userId = null }: { userId?: string | null } = {}
+  {
+    userId = null,
+    playToken = null,
+  }: { userId?: string | null } & PlayTokenOption = {}
 ) {
   if (guessRpcEnabled) {
     try {
@@ -419,6 +528,11 @@ export async function submitGuess(
         p_session_id: sessionId,
         p_guess_lat: guessLocation?.lat ?? null,
         p_guess_lng: guessLocation?.lng ?? null,
+        // The HASH, never the token: the plaintext must not reach a database log
+        // or a pg_stat_statements entry. submit_guess performs the same
+        // three-way check requirePlayToken does, inside the row lock, because
+        // this path deliberately never reads the row into JS.
+        p_play_token_hash: playToken ? hashPlayToken(playToken) : null,
       });
       const parsed = submitGuessRpcSchema.parse(payload);
       // The RPC performed the transition, so this request is the one allowed to
@@ -444,6 +558,10 @@ export async function submitGuess(
   }
 
   const session = await requireGameSession(sessionId);
+  // Before anything is read out of the session or written to it, so a refused
+  // request leaves no trace and reveals nothing about the game.
+  requirePlayToken(session.playTokenHash, playToken);
+
   if (session.status !== "in_progress") {
     throw new Error("Game session is already complete.");
   }
@@ -514,20 +632,16 @@ export async function submitGuess(
     status: "in_progress",
   };
 
-  const updatedRecord = await withSessionSchemaFallback(
-    () =>
-      updateSingleRow<GameSessionRecord>(
-        GAME_SESSIONS_TABLE,
-        // Baseline the next round's deadline at guess time; the /next ping
-        // (or legacy /next fetch) restarts it when the round is served.
-        { ...baseUpdate, round_started_at: new Date().toISOString() },
-        { filters: updateFilters, columns: GAME_SESSION_COLUMNS_EXTENDED }
-      ),
-    () =>
-      updateSingleRow<GameSessionRecord>(GAME_SESSIONS_TABLE, baseUpdate, {
-        filters: updateFilters,
-        columns: GAME_SESSION_COLUMNS_LEGACY,
-      })
+  const updatedRecord = await withSessionSchema((schema) =>
+    updateSingleRow<GameSessionRecord>(
+      GAME_SESSIONS_TABLE,
+      schema.modes
+        ? // Baseline the next round's deadline at guess time; the /next ping
+          // (or legacy /next fetch) restarts it when the round is served.
+          { ...baseUpdate, round_started_at: new Date().toISOString() }
+        : baseUpdate,
+      { filters: updateFilters, columns: sessionColumns(schema) }
+    )
   );
 
   if (!updatedRecord) {
@@ -571,6 +685,12 @@ export async function submitGuess(
  * Nothing is lost by omitting them: a player already receives each round's
  * actualLocation in the response to their own guess, which is the only moment it
  * is theirs to know, and the summary UI renders only the score and distance.
+ *
+ * No play-token guard of its own, deliberately. Its one caller is the /next route,
+ * which reaches it only after getRoundForClient has already checked the token, so
+ * a guard here would be a second read for nothing. Everything it returns is public
+ * anyway: the score and name are on the leaderboard and the distances are not
+ * secret. If it ever gains a second caller, that caller checks the token.
  */
 export async function getGameSummary(sessionId: string) {
   const session = await requireGameSession(sessionId);
@@ -585,22 +705,39 @@ export async function getGameSummary(sessionId: string) {
   };
 }
 
-export async function saveUsername(sessionId: string, username: string) {
+/**
+ * Put a name on a finished game's leaderboard entry.
+ *
+ * This route is why play tokens exist. The leaderboard publishes session ids as
+ * entry.id, and for as long as this was reachable by session id alone, anybody
+ * could rename anybody's entry to anything sanitizeUsername allows: the top score
+ * on the board, every entry on the board, repeatedly. The play token is the only
+ * thing standing between the board and that, so the guard runs before the status
+ * check and before any write.
+ */
+export async function saveUsername(
+  sessionId: string,
+  username: string,
+  { playToken = null }: PlayTokenOption = {}
+) {
   const session = await requireGameSession(sessionId);
+  requirePlayToken(session.playTokenHash, playToken);
 
   if (session.status !== "finished") {
     throw new Error("You can only save a username after finishing the game.");
   }
 
-  const updatedRecord = await updateSingleRow<GameSessionRecord>(
-    GAME_SESSIONS_TABLE,
-    {
-      username,
-    },
-    {
-      filters: { id: sessionId, status: "finished" },
-      columns: sessionColumns(),
-    }
+  const updatedRecord = await withSessionSchema((schema) =>
+    updateSingleRow<GameSessionRecord>(
+      GAME_SESSIONS_TABLE,
+      {
+        username,
+      },
+      {
+        filters: { id: sessionId, status: "finished" },
+        columns: sessionColumns(schema),
+      }
+    )
   );
 
   if (!updatedRecord) {
@@ -665,7 +802,7 @@ export async function getLeaderboard({
     // Shared-challenge games replay a known set of rounds and can be retried
     // freely, so they are kept off the global board. Only filter when the mode
     // column exists; the query is retried without it below otherwise.
-    if (sessionSchemaExtended) {
+    if (sessionSchema.modes) {
       filters.mode = { op: "neq", value: "challenge" };
     }
   }
