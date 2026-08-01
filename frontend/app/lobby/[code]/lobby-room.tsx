@@ -84,6 +84,11 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
   // Tracks which round the local pin belongs to, so it clears on a new round.
   const pinRoundRef = useRef<number | null>(null);
   const [isRematching, setIsRematching] = useState(false);
+  // True once this player has been handed the host role mid-lobby. The controls
+  // appearing is the real signal, but a Start button materialising with no
+  // explanation reads as a glitch, so it gets a sentence.
+  const [becameHost, setBecameHost] = useState(false);
+  const wasHostRef = useRef<boolean | null>(null);
   // True once the finished lobby has stopped watching for a rematch.
   const [rematchWatchEnded, setRematchWatchEnded] = useState(false);
 
@@ -203,6 +208,18 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
       window.clearInterval(timer);
     };
   }, [tokenChecked, lobbyFinished, joinCode, playerToken]);
+
+  // Notice the moment the host role arrives. Keyed off the payload rather than a
+  // message from the server, because the server does not need to know or care which
+  // client was watching when it happened.
+  useEffect(() => {
+    const isHostNow = state?.you?.isHost ?? null;
+    if (isHostNow === null) return;
+    if (wasHostRef.current === false && isHostNow) {
+      setBecameHost(true);
+    }
+    wasHostRef.current = isHostNow;
+  }, [state?.you?.isHost]);
 
   // Local 1s tick so the countdown moves between polls.
   useEffect(() => {
@@ -596,6 +613,12 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
               </Link>
             </Button>
           </div>
+
+          {becameHost && (
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              The previous host left, so you are the host now.
+            </p>
+          )}
 
           {isHost ? (
             <p className="mt-4 text-center text-xs text-muted-foreground">
