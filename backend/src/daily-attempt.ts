@@ -40,6 +40,25 @@ const MAX_CLIENT_ID_LENGTH = 100;
  * private window is a new player. That limit is real and is documented in the
  * migration; it stops the casual and accidental replay, which is nearly all of it.
  */
+/*
+ * CODEQL: js/insufficient-password-hash fires here, high severity, because the
+ * identity can arrive from toAuthUser and any non-KDF hash of something an auth
+ * parser produced looks like a password stored under sha256. Dismissed as a false
+ * positive, on four counts rather than on assertion:
+ *
+ *   1. It is not a password. toAuthUser returns { userId, isAnonymous, email } and
+ *      only userId is used here: the Supabase `sub`, a v4 UUID.
+ *   2. It is not brute-forceable. A UUID carries 122 bits, so there is no
+ *      candidate space to search, which is the entire reason bcrypt and friends
+ *      exist for human-chosen passwords.
+ *   3. It never leaves the server. The column is not in any payload sent to any
+ *      client, and nothing authenticates with it.
+ *   4. The thing a stronger construction would protect, which account played on
+ *      which day, is stored in PLAINTEXT in game_sessions.user_id, one column
+ *      over. HMAC with a server secret was considered and rejected for exactly
+ *      that reason: it would add a key to manage and protect nothing that is not
+ *      already plainly visible.
+ */
 export function dailyAttemptKey(
   challengeDate: string,
   identity: string
