@@ -53,6 +53,7 @@ import {
 import { checkRateLimit, clientIp } from "./rate-limit.js";
 import { requireAdminToken } from "./admin-auth.js";
 import { readPlayToken } from "./play-token.js";
+import { readClientId, resolveDailyKey } from "./daily-attempt.js";
 import { optionalUser, requireUser } from "./auth.js";
 import {
   getGameHistory,
@@ -282,9 +283,22 @@ export async function routeRequest(
         rounds = await selectGameRounds(5, seed);
       }
 
+      // Only for the daily, and only to key the one-attempt-per-day index. The
+      // account id is preferred so a signed-in player cannot escape by clearing
+      // browser storage; optionalUser, never requireUser, because the daily has
+      // always been playable without an account and still is.
+      const dailyKey =
+        mode === "daily"
+          ? resolveDailyKey(challengeDate, {
+              userId: (await optionalUser(request))?.userId ?? null,
+              clientId: readClientId(request),
+            })
+          : null;
+
       const { session, playToken } = await createGameSession(rounds, {
         mode,
         challengeDate,
+        dailyKey,
       });
       const payload = await getRoundForClient(session.id, { playToken });
       if (!payload) {

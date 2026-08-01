@@ -59,6 +59,12 @@ export interface GameSession {
    * Never leaves the backend: see play-token.ts.
    */
   playTokenHash: string | null;
+  /**
+   * Deduplicates one player's daily-challenge attempts within a day. Null for
+   * every other mode, and for a daily attempt with no identity to key it by.
+   * See daily-attempt.ts.
+   */
+  dailyKey: string | null;
 }
 
 /** Raw `game_sessions` row shape as returned by PostgREST. */
@@ -79,6 +85,8 @@ export interface GameSessionRecord {
   round_started_at?: string | null;
   /** Absent until add_play_token_to_game_sessions.sql is applied. */
   play_token_hash?: string | null;
+  /** Absent until add_daily_attempt_key.sql is applied. */
+  daily_key?: string | null;
 }
 
 export type LobbyStatus = "waiting" | "in_progress" | "finished";
