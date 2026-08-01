@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   forgetName,
   readRememberedName,
@@ -7,10 +7,15 @@ import {
 } from "@/lib/leaderboard-name";
 
 describe("remembering a leaderboard name", () => {
-  // removeItem on the one key, not clear(): jsdom's Storage here has no clear(),
-  // and a test should not be wiping storage it does not own anyway.
+  // Just the one key, and defensively: whether window.localStorage is jsdom's own
+  // Storage or the polyfill from tests/setup.ts differs between environments, and
+  // a leftover value here makes every assertion below depend on file order.
   beforeEach(() => {
-    window.localStorage.removeItem("tg_leaderboard_name");
+    try {
+      window.localStorage.removeItem("tg_leaderboard_name");
+    } catch {
+      // Nothing to clean if storage is unavailable.
+    }
   });
 
   it("round-trips a name", () => {
@@ -50,21 +55,46 @@ describe("remembering a leaderboard name", () => {
   it("survives storage being blocked entirely", () => {
     // Safari in private mode throws on setItem. A player with storage disabled
     // must still be able to finish a game and name a score.
-    const setItem = vi
-      .spyOn(window.localStorage, "setItem")
-      .mockImplementation(() => {
-        throw new Error("QuotaExceededError");
-      });
-    const getItem = vi
-      .spyOn(window.localStorage, "getItem")
-      .mockImplementation(() => {
+    //
+    // The whole object is swapped rather than spied on. vi.spyOn behaved
+    // differently between this machine and CI, because one has jsdom's real
+    // Storage (methods on Storage.prototype) and the other the polyfill in
+    // tests/setup.ts (methods as own properties), and the spy only bit on one of
+    // them. Replacing the object outright depends on neither.
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage");
+    const blocked = {
+      get length(): number {
         throw new Error("SecurityError");
-      });
+      },
+      key: () => {
+        throw new Error("SecurityError");
+      },
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem: () => {
+        throw new Error("SecurityError");
+      },
+      clear: () => {
+        throw new Error("SecurityError");
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: blocked,
+    });
 
-    expect(() => rememberName("Yanzhen")).not.toThrow();
-    expect(readRememberedName()).toBeNull();
-
-    setItem.mockRestore();
-    getItem.mockRestore();
+    try {
+      expect(() => rememberName("Yanzhen")).not.toThrow();
+      expect(readRememberedName()).toBeNull();
+      expect(() => forgetName()).not.toThrow();
+    } finally {
+      if (original) {
+        Object.defineProperty(window, "localStorage", original);
+      }
+    }
   });
 });
