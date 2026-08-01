@@ -271,17 +271,110 @@ export async function joinLobby(
   return { playerId, playerToken };
 }
 
+/**
+ * How long a host may go silent before the role moves to someone else.
+ *
+ * Generous on purpose. Every player's page polls every 2 seconds, or 10 when the
+ * push socket is carrying changes, so 90 seconds of silence is a strong signal
+ * rather than a slow network. It also has to survive a BACKGROUNDED TAB: mobile
+ * browsers throttle timers hard, and taking the host role away from someone who
+ * glanced at another app for a moment would be its own bug.
+ */
+const HOST_ABSENCE_MS = 90_000;
+
+/** Whether a player looks like they are still at the keyboard. */
+function isPresent(player: LobbyPlayerRecord, now: number): boolean {
+  // is_connected alone is not enough. It is only set false by an explicit leave,
+  // and closing a tab sends nothing, so a departed host stays "connected" forever
+  // with a last_seen_at that stops moving. The staleness check is the real signal
+  // and the flag is the fast path.
+  if (!player.is_connected) {
+    return false;
+  }
+  const seen = Date.parse(player.last_seen_at);
+  return Number.isFinite(seen) && now - seen <= HOST_ABSENCE_MS;
+}
+
+/**
+ * Hand the host role on when the host is gone.
+ *
+ * WHY THIS IS NEEDED. host_player_id was fixed for the life of the lobby, and it
+ * gates three things: starting the game, advancing a reveal early, and starting
+ * another game. So a host who closed their tab left a lobby that could never be
+ * started and never be replayed, with no way for anyone still sitting in it to fix
+ * that. A game already running was the one safe case, because the reveal deadline
+ * auto-advances, which is why this was survivable at all.
+ *
+ * The successor is the longest-present player, which is both fair and, more
+ * importantly, DETERMINISTIC: every caller computes the same answer. That is what
+ * makes the race harmless. Several players poll at once, all of them may notice the
+ * host is gone, and all of them try to promote the same person. The optimistic
+ * filter on host_player_id means exactly one write lands and the rest match nothing
+ * and simply re-read.
+ *
+ * Returns the lobby to carry on with, updated or not.
+ */
+async function migrateHostIfAbsent(
+  lobby: LobbyRecord,
+  players: LobbyPlayerRecord[]
+): Promise<LobbyRecord> {
+  const now = Date.now();
+  const host = players.find((player) => player.id === lobby.host_player_id);
+  if (host && isPresent(host, now)) {
+    return lobby;
+  }
+
+  const successor = players
+    .filter((player) => player.id !== lobby.host_player_id && isPresent(player, now))
+    .sort((a, b) => Date.parse(a.joined_at) - Date.parse(b.joined_at))[0];
+
+  // Nobody left to promote. Left alone rather than handed to an absent player,
+  // so that whoever comes back first can be promoted then.
+  if (!successor) {
+    return lobby;
+  }
+
+  const updated = await guarded(() =>
+    updateSingleRow<LobbyRecord>(
+      LOBBIES_TABLE,
+      { host_player_id: successor.id, updated_at: new Date().toISOString() },
+      {
+        filters: { id: lobby.id, host_player_id: lobby.host_player_id },
+        columns: LOBBY_COLUMNS,
+      }
+    )
+  );
+
+  if (!updated) {
+    // Another request promoted first. It computed the same successor, so the lobby
+    // is already in the state this one wanted, but the copy in hand still names the
+    // host it just found absent. Re-read, so a loser of the race does not serve a
+    // stale hostPlayerId for one response and leave the new host without controls
+    // until their next poll. One extra query, only on the rare racing path.
+    return fetchLobbyByCode(lobby.join_code);
+  }
+
+  await broadcastLobbyChange(lobby.join_code, "host");
+  return updated;
+}
+
 export async function startLobby(
   joinCode: string,
   playerToken: string
 ): Promise<LobbyStatePayload> {
-  const lobby = await fetchLobbyByCode(joinCode);
-  const players = await fetchPlayers(lobby.id);
+  const fetched = await fetchLobbyByCode(joinCode);
+  const players = await fetchPlayers(fetched.id);
   const viewer = findViewer(players, playerToken);
 
   if (!viewer) {
     throw createHttpError(403, "You are not in this lobby.");
   }
+
+  // Before the host check, not after. A poll would normally have promoted someone
+  // already, but a player who clicks Start the instant they notice the host is gone
+  // should not be told they are not the host of a lobby that has none.
+  const lobby = await migrateHostIfAbsent(fetched, players);
+
   if (viewer.id !== lobby.host_player_id) {
     throw createHttpError(403, "Only the host can start the game.");
   }
@@ -348,13 +441,18 @@ export async function rematchLobby(
   joinCode: string,
   playerToken: string
 ): Promise<LobbyStatePayload> {
-  const lobby = await fetchLobbyByCode(joinCode);
-  const players = await fetchPlayers(lobby.id);
+  const fetched = await fetchLobbyByCode(joinCode);
+  const players = await fetchPlayers(fetched.id);
   const viewer = findViewer(players, playerToken);
 
   if (!viewer) {
     throw createHttpError(403, "You are not in this lobby.");
   }
+
+  // Same reasoning as startLobby: a finished lobby whose host closed their tab was
+  // the other permanent dead end, since nobody else could ever press Play again.
+  const lobby = await migrateHostIfAbsent(fetched, players);
+
   if (viewer.id !== lobby.host_player_id) {
     throw createHttpError(403, "Only the host can start another game.");
   }
@@ -510,13 +608,18 @@ export async function advanceLobby(
   joinCode: string,
   playerToken: string
 ): Promise<LobbyStatePayload> {
-  const lobby = await fetchLobbyByCode(joinCode);
-  const players = await fetchPlayers(lobby.id);
+  const fetched = await fetchLobbyByCode(joinCode);
+  const players = await fetchPlayers(fetched.id);
   const viewer = findViewer(players, playerToken);
 
   if (!viewer) {
     throw createHttpError(403, "You are not in this lobby.");
   }
+
+  // So the new host can skip a reveal early rather than everyone waiting out the
+  // timer. A running game never stalled without this, since the reveal deadline
+  // auto-advances, but it did lose the one control that made it feel responsive.
+  const lobby = await migrateHostIfAbsent(fetched, players);
 
   const settled = await settleLobby(lobby, players, {
     hostAdvancing: viewer.id === lobby.host_player_id,
@@ -562,17 +665,31 @@ export async function getLobbyState(
   const viewer = findViewer(players, playerToken);
 
   if (viewer) {
+    const seenAt = new Date().toISOString();
     // Touch presence so "who is still here" stays roughly accurate.
     void guarded(() =>
       updateSingleRow<LobbyPlayerRecord>(
         LOBBY_PLAYERS_TABLE,
-        { is_connected: true, last_seen_at: new Date().toISOString() },
+        { is_connected: true, last_seen_at: seenAt },
         { filters: { id: viewer.id }, columns: "id" }
       )
     ).catch(() => undefined);
+
+    // Reflected in the array too, because migrateHostIfAbsent below reads it. The
+    // write above is fire-and-forget, so without this the caller is judged on a
+    // last_seen_at from their PREVIOUS poll: a player returning after a couple of
+    // minutes would be treated as absent on the very request that proves they are
+    // not, and so skipped as a successor. Whoever is making this request is present
+    // by definition, whether or not the write lands.
+    viewer.is_connected = true;
+    viewer.last_seen_at = seenAt;
   }
 
-  const settled = await settleLobby(lobby, players);
+  // The main path. Every player's page polls this every couple of seconds, so an
+  // absent host is noticed and replaced without anyone having to do anything.
+  const withHost = await migrateHostIfAbsent(lobby, players);
+
+  const settled = await settleLobby(withHost, players);
   return buildStatePayload(
     settled.lobby,
     settled.players,
