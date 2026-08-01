@@ -29,9 +29,14 @@ import {
   startGame as startGameRequest,
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
+import { getSession } from "@/lib/auth-client";
 import { parseGameParams } from "@/lib/game-params";
 import { formatDistance } from "@/lib/format-distance";
-import { toLeaderboardName } from "@/lib/leaderboard-name";
+import {
+  readRememberedName,
+  rememberName,
+  toLeaderboardName,
+} from "@/lib/leaderboard-name";
 import { recordPlayedToday, type StreakState } from "@/lib/streak";
 import { ShareResults } from "@/components/share-results";
 import { ChallengeFriend } from "@/components/challenge-friend";
@@ -131,6 +136,9 @@ export default function Game() {
     try {
       const game = await startGameRequest(requestedMode, requestedCode);
       setSessionId(game.sessionId);
+      // Prefilled so a returning guest sees their own name in the field rather
+      // than an empty box, even in the case where the auto-file below is skipped.
+      setUsernameInput(readRememberedName() ?? "");
       setPlayToken(game.playToken ?? null);
       setSavedUsername(game.username);
       setMode(game.mode ?? requestedMode);
@@ -155,6 +163,43 @@ export default function Game() {
   useEffect(() => {
     void startGame();
   }, []);
+
+  /**
+   * File a returning guest's remembered name without asking again.
+   *
+   * The signed-in path already does exactly this with the account name, and a
+   * guest who has named a score before has told us the same thing: it just had
+   * nowhere to live. Retyping it after every game is most of why 1403 of 1504
+   * finished games are still called "Guest NNNN".
+   *
+   * Guests only. A signed-in player's name comes from their profile, and
+   * syncLeaderboardName already handles that; running both would file two names
+   * for one game. filedNameRef is shared with that path, so whichever fires first
+   * wins and the other is a no-op.
+   */
+  useEffect(() => {
+    if (gameState !== "summary" || !sessionId) return;
+    const remembered = readRememberedName();
+    if (!remembered) return;
+
+    let cancelled = false;
+    void (async () => {
+      // getSession() rather than the hasAccount prop. That prop starts false and
+      // only becomes true once SaveProgress has finished reading storage, so a
+      // signed-in player would briefly look like a guest here and get their old
+      // guest name filed before their account name arrived. Asking directly has no
+      // such window.
+      if (await getSession()) return;
+      if (!cancelled) void syncLeaderboardName(remembered);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // syncLeaderboardName is recreated every render and guards itself against
+    // repeats, so it is deliberately not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState, sessionId]);
 
   // Count the day once the game is actually finished, not when it starts, so a
   // streak reflects games played through. Keyed on the session so re-rendering
@@ -194,6 +239,10 @@ export default function Game() {
         playToken,
       );
       setSavedUsername(response.saved.username);
+      // The name the SERVER settled on, not what was typed: it owns the
+      // blocked-word list and the length rule, so remembering the input could
+      // prefill something it will refuse next time.
+      rememberName(response.saved.username);
       setSaveMessage(`Saved as ${response.saved.username}.`);
     } catch (error) {
       const message =
@@ -592,63 +641,15 @@ export default function Game() {
                 </div>
               </div>
 
-              {/* Round breakdown */}
-              <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-75 sm:p-7">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Round breakdown
-                </h3>
-                <ul className="mt-4 space-y-3">
-                  {scores.map((round) => {
-                    const pct = Math.max(
-                      0,
-                      Math.min(100, (round.score / MAX_ROUND_SCORE) * 100),
-                    );
-                    return (
-                      <li
-                        key={round.roundNumber}
-                        className="flex items-center gap-4"
-                      >
-                        <span className="w-16 shrink-0 text-sm font-medium text-muted-foreground">
-                          Round {round.roundNumber}
-                        </span>
-                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={cn(
-                              "h-full rounded-full transition-[width] duration-700 ease-spring",
-                              tierBarColor(round.score),
-                            )}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="w-28 shrink-0 text-right text-sm">
-                          <span className="font-bold tabular">
-                            {round.score.toLocaleString("en-US")}
-                          </span>
-                          <span className="block text-xs text-muted-foreground">
-                            {formatDistance(round.distance)}
-                          </span>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-
-              {/* Offer to keep the streak beyond this browser */}
-              <SaveProgress
-                onAccountChange={setHasAccount}
-                onDisplayName={(displayName) =>
-                  void syncLeaderboardName(displayName)
-                }
-                leaderboardStatus={
-                  saveErrorMessage
-                    ? { kind: "error", message: saveErrorMessage }
-                    : saveMessage
-                      ? { kind: "saved", message: saveMessage }
-                      : null
-                }
-              />
-
+              {/* ORDER IS THE POINT HERE.
+                  Measured on production, on a real finished game: the leaderboard
+                  name field sat 1.19 screens down on a 390px phone and 1.12 on
+                  desktop, with Play again below it. Nothing a player could DO was
+                  above the fold. 1403 of 1504 finished games are still called
+                  "Guest NNNN", no challenge link has ever been created, and the
+                  only account is a test one. So the cheap, high-value actions come
+                  first now, and the two blocks that are informational (the round
+                  breakdown) or ask for a commitment (the account) come after. */}
               {/* Save username. Guests only: a signed-in player's leaderboard
                   name is their account name, filed automatically above. */}
               {!hasAccount && (
@@ -733,6 +734,63 @@ export default function Game() {
                   </Link>
                 </Button>
               </div>
+              {/* Round breakdown */}
+              <div className="surface-card mt-5 animate-fade-up rounded-2xl p-6 delay-75 sm:p-7">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Round breakdown
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {scores.map((round) => {
+                    const pct = Math.max(
+                      0,
+                      Math.min(100, (round.score / MAX_ROUND_SCORE) * 100),
+                    );
+                    return (
+                      <li
+                        key={round.roundNumber}
+                        className="flex items-center gap-4"
+                      >
+                        <span className="w-16 shrink-0 text-sm font-medium text-muted-foreground">
+                          Round {round.roundNumber}
+                        </span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-[width] duration-700 ease-spring",
+                              tierBarColor(round.score),
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="w-28 shrink-0 text-right text-sm">
+                          <span className="font-bold tabular">
+                            {round.score.toLocaleString("en-US")}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatDistance(round.distance)}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Offer to keep the streak beyond this browser */}
+              <SaveProgress
+                onAccountChange={setHasAccount}
+                onDisplayName={(displayName) =>
+                  void syncLeaderboardName(displayName)
+                }
+                leaderboardStatus={
+                  saveErrorMessage
+                    ? { kind: "error", message: saveErrorMessage }
+                    : saveMessage
+                      ? { kind: "saved", message: saveMessage }
+                      : null
+                }
+              />
+
             </div>
           )}
         </section>

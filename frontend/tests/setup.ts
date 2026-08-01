@@ -17,6 +17,13 @@ afterEach(() => {
   // shows up as tests that pass alone and fail in a suite.
   if (typeof document !== "undefined") {
     cleanup();
+    // Same reasoning for storage: a remembered name left behind by one suite
+    // would make the next one pass or fail depending on file order.
+    try {
+      window.localStorage.clear();
+    } catch {
+      // A suite may have deliberately broken storage to test that path.
+    }
   }
 });
 
@@ -44,6 +51,47 @@ if (typeof document !== "undefined") {
   }
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = () => undefined;
+  }
+
+  // jsdom 29 under this vitest environment exposes window.localStorage as a plain
+  // object: its prototype is Object.prototype, not Storage, so getItem is
+  // undefined and any call throws "not a function". That is worth stating because
+  // it means storage-backed code was not merely untested, it was UNTESTABLE, and a
+  // suite that touched it failed for a reason that looked like a bug in the code.
+  //
+  // Replaced with a real Storage-shaped object over a Map. Reset in afterEach
+  // below so one suite cannot leak a value into the next.
+  const needsStorage =
+    typeof window.localStorage !== "object" ||
+    window.localStorage === null ||
+    typeof (window.localStorage as Partial<Storage>).getItem !== "function";
+
+  if (needsStorage) {
+    const entries = new Map<string, string>();
+    const storage: Storage = {
+      get length() {
+        return entries.size;
+      },
+      key: (index: number) => [...entries.keys()][index] ?? null,
+      getItem: (key: string) => entries.get(String(key)) ?? null,
+      setItem: (key: string, value: string) => {
+        entries.set(String(key), String(value));
+      },
+      removeItem: (key: string) => {
+        entries.delete(String(key));
+      },
+      clear: () => {
+        entries.clear();
+      },
+    };
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: storage,
+    });
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: storage,
+    });
   }
 
   if (!window.matchMedia) {
