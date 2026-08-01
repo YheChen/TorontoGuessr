@@ -23,9 +23,11 @@ export function setCorsHeaders(response: ServerResponse): void {
   // single-player game it is. Both must be listed here or the browser's preflight
   // rejects every authenticated request (curl does not preflight, so a missing
   // entry passes every command-line test and fails only in a real browser).
+  // X-Client-Id is the browser's own random id, used only to allow one daily
+  // challenge attempt per player per day.
   response.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-Admin-Token, X-Play-Token, X-Player-Token, Authorization"
+    "Content-Type, X-Admin-Token, X-Client-Id, X-Play-Token, X-Player-Token, Authorization"
   );
   response.setHeader(
     "Access-Control-Allow-Methods",

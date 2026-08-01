@@ -16,6 +16,7 @@ import {
   requirePlayToken,
 } from "./play-token.js";
 import { syncStreak } from "./profile-store.js";
+import { createHttpError } from "./http-utils.js";
 import {
   createGuestUsername,
   resolveDefaultUsername,
@@ -71,6 +72,12 @@ const OPTIONAL_COLUMN_GROUPS = {
     warning:
       "[game-store] play_token_hash column missing; run add_play_token_to_game_sessions.sql. Games cannot be tied to the player who started them until then, so anyone with a session id can rename its leaderboard entry.",
   },
+  /** add_daily_attempt_key.sql */
+  dailyKey: {
+    columns: ["daily_key"],
+    warning:
+      "[game-store] daily_key column missing; run add_daily_attempt_key.sql. The daily challenge can be replayed for a perfect score until then, because one play reveals all five answers.",
+  },
 } as const;
 
 type ColumnGroup = keyof typeof OPTIONAL_COLUMN_GROUPS;
@@ -83,6 +90,7 @@ type SessionSchema = Record<ColumnGroup, boolean>;
 const sessionSchema: SessionSchema = {
   modes: true,
   playToken: true,
+  dailyKey: true,
 };
 const warnedGroups = new Set<ColumnGroup>();
 
@@ -251,6 +259,7 @@ function mapSessionRecord(record: GameSessionRecord): GameSession {
     challengeDate: record.challenge_date ?? null,
     roundStartedAt: record.round_started_at ?? null,
     playTokenHash: record.play_token_hash ?? null,
+    dailyKey: record.daily_key ?? null,
   };
 }
 
@@ -280,6 +289,10 @@ function buildSessionInsert(
 
   if (schema.playToken) {
     base.play_token_hash = session.playTokenHash;
+  }
+
+  if (schema.dailyKey) {
+    base.daily_key = session.dailyKey;
   }
 
   return base;
@@ -371,6 +384,20 @@ async function requireGameSession(sessionId: string): Promise<GameSession> {
 interface CreateGameSessionOptions {
   mode?: GameMode;
   challengeDate?: string | null;
+  /** See daily-attempt.ts. Null for anything but a keyed daily attempt. */
+  dailyKey?: string | null;
+}
+
+/**
+ * A unique-index violation, which for game_sessions means exactly one thing: this
+ * player has already started today's daily challenge.
+ */
+function isDuplicateDailyAttempt(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /duplicate key value|unique constraint/i.test(error.message) &&
+    error.message.includes("daily")
+  );
 }
 
 /**
@@ -382,7 +409,11 @@ interface CreateGameSessionOptions {
  */
 export async function createGameSession(
   rounds: GameRound[],
-  { mode = "classic", challengeDate = null }: CreateGameSessionOptions = {}
+  {
+    mode = "classic",
+    challengeDate = null,
+    dailyKey = null,
+  }: CreateGameSessionOptions = {}
 ): Promise<{ session: GameSession; playToken: string }> {
   const playToken = createPlayToken();
   const session: GameSession = {
@@ -401,15 +432,30 @@ export async function createGameSession(
     challengeDate: mode === "daily" ? challengeDate : null,
     roundStartedAt: new Date().toISOString(),
     playTokenHash: hashPlayToken(playToken),
+    dailyKey: mode === "daily" ? dailyKey : null,
   };
 
-  const record = await withSessionSchema((schema) =>
-    insertRow<GameSessionRecord>(
-      GAME_SESSIONS_TABLE,
-      buildSessionInsert(session, schema),
-      { columns: sessionColumns(schema) }
-    )
-  );
+  let record: GameSessionRecord;
+  try {
+    record = await withSessionSchema((schema) =>
+      insertRow<GameSessionRecord>(
+        GAME_SESSIONS_TABLE,
+        buildSessionInsert(session, schema),
+        { columns: sessionColumns(schema) }
+      )
+    );
+  } catch (error) {
+    // The unique index on (challenge_date, daily_key) rejected it, which can only
+    // mean this player already has today's daily. Translated here rather than in
+    // the router so the guarantee travels with the write that enforces it.
+    if (isDuplicateDailyAttempt(error)) {
+      throw createHttpError(
+        409,
+        "You have already played today's daily challenge. Come back tomorrow, or play a classic round."
+      );
+    }
+    throw error;
+  }
 
   return { session: mapSessionRecord(record), playToken };
 }

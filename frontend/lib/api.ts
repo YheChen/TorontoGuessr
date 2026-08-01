@@ -1,4 +1,5 @@
 import { getSession, refreshSession } from "@/lib/auth-client";
+import { getClientId } from "@/lib/daily-attempt";
 
 import type {
   CreateChallengeResponse,
@@ -87,12 +88,23 @@ export function startGame(
   mode: GameMode = "classic",
   challengeCode?: string | null
 ) {
-  return request<StartGameResponse>("/games/start", {
-    method: "POST",
-    body: JSON.stringify(
-      mode === "challenge" ? { mode, challengeCode } : { mode }
-    ),
-  });
+  // The browser's own id, and only for the daily: it is what lets the server
+  // notice a second attempt at the same day's challenge. Sent for the daily alone
+  // rather than on every start, so nothing else is ever keyed by it.
+  const clientId = mode === "daily" ? getClientId() : null;
+  return request<StartGameResponse>(
+    "/games/start",
+    {
+      method: "POST",
+      headers: clientId ? { "x-client-id": clientId } : {},
+      body: JSON.stringify(
+        mode === "challenge" ? { mode, challengeCode } : { mode }
+      ),
+    },
+    // Authenticated so a signed-in player is keyed by their ACCOUNT rather than
+    // their browser, which they cannot escape by clearing storage.
+    { authenticated: mode === "daily" }
+  );
 }
 
 /**

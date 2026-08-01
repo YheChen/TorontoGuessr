@@ -6,10 +6,12 @@ import {
   Trophy,
   RotateCcw,
   Save,
+  CalendarCheck,
   Check,
   Flag,
   MapPin,
   Crosshair,
+  Play,
   Swords,
 } from "lucide-react";
 import { GameHUD } from "@/components/game-hud";
@@ -18,7 +20,11 @@ import GamePanorama from "@/components/gamepanorama";
 import { PanoPrefetch } from "@/components/pano-prefetch";
 import { RoundCountdown } from "@/components/round-countdown";
 import { RoundResultCard } from "@/components/round-result-card";
-import { LoadingScreen, ErrorCard } from "@/components/site/states";
+import {
+  EmptyState,
+  ErrorCard,
+  LoadingScreen,
+} from "@/components/site/states";
 import { CountUp } from "@/components/site/count-up";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +36,10 @@ import {
   submitGuess as submitGuessRequest,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth-client";
+import {
+  hasPlayedDailyToday,
+  markDailyPlayed,
+} from "@/lib/daily-attempt";
 import { parseGameParams } from "@/lib/game-params";
 import { formatDistance } from "@/lib/format-distance";
 import {
@@ -58,7 +68,10 @@ type GameState =
   | "submitting"
   | "results"
   | "summary"
-  | "error";
+  | "error"
+  // Its own state rather than an error: nothing went wrong, the player has
+  // already had their one attempt at today's challenge.
+  | "daily-used";
 
 const MAX_ROUND_SCORE = 5000;
 
@@ -133,8 +146,21 @@ export default function Game() {
         typeof window === "undefined" ? "" : window.location.search
       );
 
+    // Checked before the request so a returning player is told immediately instead
+    // of watching a game start and then getting a 409. The server's unique index is
+    // the actual guarantee; this is the courtesy.
+    if (requestedMode === "daily" && hasPlayedDailyToday()) {
+      setGameState("daily-used");
+      return;
+    }
+
     try {
       const game = await startGameRequest(requestedMode, requestedCode);
+      if (requestedMode === "daily") {
+        // Marked at start, not at finish: the answers to any round already seen
+        // are out, so abandoning half way still uses the attempt up.
+        markDailyPlayed();
+      }
       setSessionId(game.sessionId);
       // Prefilled so a returning guest sees their own name in the field rather
       // than an empty box, even in the case where the auto-file below is skipped.
@@ -155,6 +181,14 @@ export default function Game() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to start the game.";
+      // The server refused because this player already has today's daily. Show the
+      // same screen the local check shows, not a generic failure, and remember it
+      // so the next visit does not ask again.
+      if (requestedMode === "daily" && /already played/i.test(message)) {
+        markDailyPlayed();
+        setGameState("daily-used");
+        return;
+      }
       setErrorMessage(message);
       setGameState("error");
     }
@@ -591,6 +625,40 @@ export default function Game() {
                 message={errorMessage ?? "The game could not continue."}
                 onRetry={() => void startGame()}
                 retryLabel="Try again"
+              />
+            </div>
+          )}
+
+          {/* Already had today's attempt. Its own screen rather than an error,
+              because nothing failed, and it points at the two things still worth
+              doing rather than leaving a dead end. */}
+          {gameState === "daily-used" && (
+            <div className="mx-auto max-w-xl">
+              <EmptyState
+                icon={CalendarCheck}
+                title="You have already played today's challenge"
+                description="The daily gives everyone the same five locations, so it is one attempt each. A new one is dealt at midnight in Toronto."
+                action={
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button asChild size="lg" className="rounded-xl">
+                      <Link href="/game">
+                        <Play className="size-4" />
+                        Play a classic round
+                      </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      size="lg"
+                      variant="outline"
+                      className="rounded-xl"
+                    >
+                      <Link href="/leaderboard?board=challenge">
+                        <Trophy className="size-4" />
+                        Today&rsquo;s daily board
+                      </Link>
+                    </Button>
+                  </div>
+                }
               />
             </div>
           )}
