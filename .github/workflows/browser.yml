@@ -104,7 +104,7 @@ jobs:
       # numbers are in the report and the screenshot shows what it looked like.
       - name: Upload the report
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
