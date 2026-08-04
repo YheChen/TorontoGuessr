@@ -53,11 +53,25 @@ if (typeof document !== "undefined") {
     Element.prototype.scrollIntoView = () => undefined;
   }
 
-  // jsdom 29 under this vitest environment exposes window.localStorage as a plain
-  // object: its prototype is Object.prototype, not Storage, so getItem is
-  // undefined and any call throws "not a function". That is worth stating because
-  // it means storage-backed code was not merely untested, it was UNTESTABLE, and a
-  // suite that touched it failed for a reason that looked like a bug in the code.
+  // In this vitest jsdom environment window.localStorage sometimes arrives without
+  // Storage's methods at all: prototype Object.prototype, getItem undefined, and
+  // any call throwing "not a function". It is environment dependent rather than
+  // version dependent, which is the part worth knowing. With identical package
+  // versions and the same lockfile, CI gets a working Storage and this machine does
+  // not, and bumping jsdom 29 to 30 changed nothing either way.
+  //
+  // jsdom itself is NOT the cause, and an earlier version of this comment wrongly
+  // said it was. Constructed directly on the same Node version with a non-opaque
+  // origin, jsdom 29 and 30 both hand back a proper Storage; only an opaque origin
+  // like about:blank refuses, with a SecurityError. So the substitution happens
+  // somewhere in how the environment is set up and its globals are populated, not
+  // in jsdom. Not chased further than that: the conditional polyfill below covers
+  // both cases and the quirk is not worth more time than it has already taken.
+  //
+  // The consequence that DOES matter: do not vi.spyOn a localStorage method here.
+  // The spy binds to whichever implementation this machine happens to have, so a
+  // test can pass locally and fail in CI for no reason visible in the diff. That
+  // exact failure happened; replace the whole object instead.
   //
   // Replaced with a real Storage-shaped object over a Map. Reset in afterEach
   // below so one suite cannot leak a value into the next.
