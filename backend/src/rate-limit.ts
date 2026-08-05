@@ -1,4 +1,5 @@
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { createHttpError } from "./http-utils.js";
 
 /**
  * In-memory fixed-window rate limiter.
@@ -71,6 +72,36 @@ export function clientIp(request: IncomingMessage): string {
   }
 
   return request.socket?.remoteAddress ?? "unknown";
+}
+
+/**
+ * Cap a route per client IP, or refuse the request.
+ *
+ * Sets Retry-After and throws 429, which the router's error handler renders as
+ * the same JSON body an inline check would have sent. Call it before anything
+ * expensive (reading a body, verifying a JWT, touching the database) so that a
+ * refused request costs as close to nothing as possible.
+ *
+ * `bucket` namespaces the counter, so each route gets its own allowance and one
+ * busy route cannot lock a player out of another.
+ */
+export function enforceRateLimit(
+  request: IncomingMessage,
+  response: ServerResponse,
+  bucket: string,
+  { limit, windowMs = 60_000 }: { limit: number; windowMs?: number },
+  message: string
+): void {
+  const result = checkRateLimit(`${bucket}:${clientIp(request)}`, {
+    limit,
+    windowMs,
+  });
+  if (result.allowed) {
+    return;
+  }
+
+  response.setHeader("Retry-After", String(result.retryAfterSeconds));
+  throw createHttpError(429, message);
 }
 
 /** Reset all buckets. Test-only. */
