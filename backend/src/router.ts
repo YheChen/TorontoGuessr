@@ -50,7 +50,7 @@ import {
   enterRequestTimings,
   logRequestTiming,
 } from "./observability.js";
-import { checkRateLimit, clientIp } from "./rate-limit.js";
+import { enforceRateLimit } from "./rate-limit.js";
 import { requireAdminToken } from "./admin-auth.js";
 import { readPlayToken } from "./play-token.js";
 import { readClientId, resolveDailyKey } from "./daily-attempt.js";
@@ -238,19 +238,13 @@ export async function routeRequest(
     if (request.method === "POST" && pathname === "/games/start") {
       // Starting a game is the most expensive route (Street View + inserts),
       // so cap it per IP to deter session spam.
-      const rateLimit = checkRateLimit(`games-start:${clientIp(request)}`, {
-        limit: 20,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(
-          response,
-          429,
-          "Too many new games from this address. Please wait a moment and try again."
-        );
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "games-start",
+        { limit: 20 },
+        "Too many new games from this address. Please wait a moment and try again."
+      );
 
       const { mode, challengeCode: requestedCode } = startGameSchema.parse(
         await readBody(request)
@@ -321,6 +315,20 @@ export async function routeRequest(
 
     const guessParams = matchRoute(pathname, "/games/:sessionId/guess");
     if (request.method === "POST" && guessParams?.sessionId) {
+      // Capped even though a play token is required, because the token cannot be
+      // checked until the session row has been read: the hash it is compared
+      // against lives in that row. A request with a bogus token therefore still
+      // costs a database round trip, so the cap has to come first to be worth
+      // anything. Sized so it can never bind before games-start does: 20 new
+      // games a minute times five rounds is 100 legitimate guesses.
+      enforceRateLimit(
+        request,
+        response,
+        "games-guess",
+        { limit: 120 },
+        "Too many guesses from this address. Please wait a moment and try again."
+      );
+
       // optionalUser, never requireUser: a guest sends no Authorization header,
       // gets null, and plays exactly as before. Resolved before anything is read
       // or written, so the 401 it raises for an expired token leaves no state
@@ -338,6 +346,16 @@ export async function routeRequest(
 
     const nextParams = matchRoute(pathname, "/games/:sessionId/next");
     if (request.method === "POST" && nextParams?.sessionId) {
+      // Same reasoning and same ceiling as the guess route: one call per round
+      // transition, and the play token is only checkable after the read.
+      enforceRateLimit(
+        request,
+        response,
+        "games-next",
+        { limit: 120 },
+        "Too many round requests from this address. Please wait a moment and try again."
+      );
+
       const sessionId = requireSessionId(nextParams.sessionId);
       // Deliberately does NOT reset the round deadline. It used to, which meant
       // a client could keep pinging /next during a round and push the 60s + 15s
@@ -364,19 +382,13 @@ export async function routeRequest(
     const challengeParams = matchRoute(pathname, "/games/:sessionId/challenge");
     if (request.method === "POST" && challengeParams?.sessionId) {
       // Each call writes a row, so cap it per IP like new games are capped.
-      const rateLimit = checkRateLimit(
-        `challenge-create:${clientIp(request)}`,
-        { limit: 10, windowMs: 60_000 }
+      enforceRateLimit(
+        request,
+        response,
+        "challenge-create",
+        { limit: 10 },
+        "Too many challenge links from this address. Please wait a moment and try again."
       );
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(
-          response,
-          429,
-          "Too many challenge links from this address. Please wait a moment and try again."
-        );
-        return;
-      }
 
       sendJson(
         response,
@@ -391,6 +403,16 @@ export async function routeRequest(
 
     const usernameParams = matchRoute(pathname, "/games/:sessionId/username");
     if (request.method === "POST" && usernameParams?.sessionId) {
+      // One call per finished game, plus a few retries when a name is rejected.
+      // Well above the 20 games a minute games-start allows.
+      enforceRateLimit(
+        request,
+        response,
+        "games-username",
+        { limit: 40 },
+        "Too many name submissions from this address. Please wait a moment and try again."
+      );
+
       const parsedBody = usernameSchema.parse(await readBody(request));
       const username = sanitizeUsername(parsedBody.username);
       sendJson(response, 200, {
@@ -404,6 +426,19 @@ export async function routeRequest(
     }
 
     if (request.method === "GET" && pathname === "/leaderboard") {
+      // The CDN absorbs repeat reads of the same URL, but period, board, page and
+      // limit are all part of the cache key, so varying them walks past the cache
+      // into a fresh query every time. This caps that. The limit is generous
+      // because a real visitor paging through the board is nowhere near it, and a
+      // cache-busting sweep burns its own allowance.
+      enforceRateLimit(
+        request,
+        response,
+        "leaderboard",
+        { limit: 60 },
+        "Too many leaderboard requests from this address. Please slow down."
+      );
+
       const query = leaderboardQuerySchema.parse({
         period: url.searchParams.get("period") ?? undefined,
         board: url.searchParams.get("board") ?? undefined,
@@ -423,6 +458,19 @@ export async function routeRequest(
     }
 
     if (request.method === "GET" && pathname === "/stats/games") {
+      // Cache-bustable like the leaderboard, and worse: `days` spans 1 to 3650
+      // and `timeZone` is free-form text, so the key space is effectively
+      // unbounded while each miss aggregates over the whole range. Capped lower
+      // than the leaderboard because the query costs more and a real visitor only
+      // changes the range a handful of times.
+      enforceRateLimit(
+        request,
+        response,
+        "stats-games",
+        { limit: 30 },
+        "Too many stats requests from this address. Please slow down."
+      );
+
       const query = gameStatsQuerySchema.parse({
         days: url.searchParams.get("days") ?? undefined,
         timeZone: url.searchParams.get("timeZone") ?? undefined,
@@ -459,19 +507,13 @@ export async function routeRequest(
     }
 
     if (request.method === "POST" && pathname === "/lobbies") {
-      const rateLimit = checkRateLimit(`lobby-create:${clientIp(request)}`, {
-        limit: 10,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(
-          response,
-          429,
-          "Too many new lobbies from this address. Please wait a moment and try again."
-        );
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-create",
+        { limit: 10 },
+        "Too many new lobbies from this address. Please wait a moment and try again."
+      );
 
       const { displayName } = lobbyNameSchema.parse(await readBody(request));
       sendJson(response, 200, await createLobby(displayName ?? ""));
@@ -480,15 +522,13 @@ export async function routeRequest(
 
     const lobbyJoinParams = matchRoute(pathname, "/lobbies/:code/join");
     if (request.method === "POST" && lobbyJoinParams?.code) {
-      const rateLimit = checkRateLimit(`lobby-join:${clientIp(request)}`, {
-        limit: 20,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(response, 429, "Too many join attempts. Please wait a moment.");
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-join",
+        { limit: 20 },
+        "Too many join attempts. Please wait a moment."
+      );
 
       const { displayName } = lobbyNameSchema.parse(await readBody(request));
       sendJson(
@@ -503,15 +543,13 @@ export async function routeRequest(
     if (request.method === "GET" && lobbyStateParams?.code) {
       // Clients poll this every couple of seconds, so it needs a far higher
       // ceiling than the mutating routes.
-      const rateLimit = checkRateLimit(`lobby-state:${clientIp(request)}`, {
-        limit: 120,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(response, 429, "Polling too quickly. Please slow down.");
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-state",
+        { limit: 120 },
+        "Polling too quickly. Please slow down."
+      );
 
       const header = request.headers["x-player-token"];
       const token = typeof header === "string" && header.trim() ? header.trim() : null;
@@ -526,6 +564,17 @@ export async function routeRequest(
 
     const lobbyStartParams = matchRoute(pathname, "/lobbies/:code/start");
     if (request.method === "POST" && lobbyStartParams?.code) {
+      // The player token is no defence against volume here: startLobby reads the
+      // lobby AND its players before it can check the token, so a bogus token
+      // still costs two queries. One press per game, so this is far above use.
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-start",
+        { limit: 30 },
+        "Too many start attempts. Please wait a moment."
+      );
+
       sendJson(
         response,
         200,
@@ -539,15 +588,13 @@ export async function routeRequest(
 
     const lobbyGuessParams = matchRoute(pathname, "/lobbies/:code/guess");
     if (request.method === "POST" && lobbyGuessParams?.code) {
-      const rateLimit = checkRateLimit(`lobby-guess:${clientIp(request)}`, {
-        limit: 60,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(response, 429, "Too many guesses. Please wait a moment.");
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-guess",
+        { limit: 60 },
+        "Too many guesses. Please wait a moment."
+      );
 
       const parsedBody = lobbyGuessSchema.parse(await readBody(request));
       sendJson(
@@ -564,6 +611,17 @@ export async function routeRequest(
 
     const lobbyNextParams = matchRoute(pathname, "/lobbies/:code/next");
     if (request.method === "POST" && lobbyNextParams?.code) {
+      // Two reads before the token check, as with start. Every player in the
+      // lobby may press this each round, so it matches the guess ceiling rather
+      // than the once-per-game ones.
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-next",
+        { limit: 60 },
+        "Too many advance attempts. Please wait a moment."
+      );
+
       sendJson(
         response,
         200,
@@ -578,20 +636,14 @@ export async function routeRequest(
     const lobbyRematchParams = matchRoute(pathname, "/lobbies/:code/rematch");
     if (request.method === "POST" && lobbyRematchParams?.code) {
       // Deals five fresh rounds, so it is capped like creating a lobby rather
-      // than like the free routes.
-      const rateLimit = checkRateLimit(`lobby-rematch:${clientIp(request)}`, {
-        limit: 10,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(
-          response,
-          429,
-          "Too many new games from this address. Please wait a moment."
-        );
-        return;
-      }
+      // than like the cheaper routes.
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-rematch",
+        { limit: 10 },
+        "Too many new games from this address. Please wait a moment."
+      );
 
       sendJson(
         response,
@@ -606,6 +658,16 @@ export async function routeRequest(
 
     const lobbyLeaveParams = matchRoute(pathname, "/lobbies/:code/leave");
     if (request.method === "POST" && lobbyLeaveParams?.code) {
+      // Two reads before the token check, as with start and next. Nothing in the
+      // frontend calls this yet, so any volume at all is somebody probing it.
+      enforceRateLimit(
+        request,
+        response,
+        "lobby-leave",
+        { limit: 30 },
+        "Too many leave attempts. Please wait a moment."
+      );
+
       sendJson(
         response,
         200,
@@ -640,15 +702,13 @@ export async function routeRequest(
     // raises `best`, and is clamped to the days the game has been open; `current`
     // stays derived from played games and cannot be set from here.
     if (request.method === "POST" && pathname === "/me/streak") {
-      const rateLimit = checkRateLimit(`streak-import:${clientIp(request)}`, {
-        limit: 10,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(response, 429, "Too many updates. Please wait a moment.");
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "streak-import",
+        { limit: 10 },
+        "Too many updates. Please wait a moment."
+      );
 
       const user = await requireUser(request);
       const body = streakImportSchema.parse(await readBody(request));
@@ -659,15 +719,13 @@ export async function routeRequest(
     }
 
     if (request.method === "PATCH" && pathname === "/me") {
-      const rateLimit = checkRateLimit(`profile-update:${clientIp(request)}`, {
-        limit: 20,
-        windowMs: 60_000,
-      });
-      if (!rateLimit.allowed) {
-        response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
-        sendError(response, 429, "Too many updates. Please wait a moment.");
-        return;
-      }
+      enforceRateLimit(
+        request,
+        response,
+        "profile-update",
+        { limit: 20 },
+        "Too many updates. Please wait a moment."
+      );
 
       const user = await requireUser(request);
       const body = displayNameSchema.parse(await readBody(request));
