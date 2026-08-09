@@ -2,6 +2,7 @@ import { URL } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import {
+  buildRoundPayload,
   createGameSession,
   getGameSummary,
   getDailyGameStats,
@@ -294,10 +295,13 @@ export async function routeRequest(
         challengeDate,
         dailyKey,
       });
-      const payload = await getRoundForClient(session.id, { playToken });
-      if (!payload) {
-        throw new Error("New game session is missing its first round.");
-      }
+      // Built from the record the insert just returned, not read back. This was
+      // getRoundForClient, which re-fetched the row and re-checked the play
+      // token: a third sequential Supabase round trip on the slowest route in
+      // the app, for a row already in hand and a token minted three lines up.
+      // Neither guard could ever fire here, since the insert hardcodes
+      // status = in_progress and the token is this request's own.
+      const payload = buildRoundPayload(session);
 
       sendJson(response, 200, {
         sessionId: session.id,
