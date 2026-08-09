@@ -223,7 +223,16 @@ function getLeaderboardSince(period: LeaderboardPeriod): string | null {
   }
 }
 
-function buildRoundPayload(session: GameSession): RoundPayload {
+/**
+ * The current round as the browser may see it, from a session already in hand.
+ *
+ * Exported for the one caller that does not need to read: /games/start has just
+ * inserted the row and holds the returned record, so calling getRoundForClient
+ * there spent a third sequential Supabase round trip re-fetching data it was
+ * already holding. Every other caller should use getRoundForClient, which reads
+ * the session and verifies the caller's play token.
+ */
+export function buildRoundPayload(session: GameSession): RoundPayload {
   const round = session.rounds[session.currentRoundIndex];
   if (!round) {
     throw new Error("No active round found for this session.");
