@@ -13,12 +13,15 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
   },
-  // The Next tsconfig sets jsx: "preserve" because Next does its own transform.
-  // esbuild would then hand untransformed JSX to the runtime, so the automatic
-  // runtime is selected here instead of adding a plugin for it.
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "react",
+  // The Next tsconfig sets jsx: "preserve" because Next does its own transform,
+  // so the JSX has to be given a runtime here or the .tsx suites reach
+  // vite:import-analysis untransformed and fail to parse. That is worth stating
+  // precisely, because the option this lives under is not stable across
+  // versions: it was esbuild.jsx until Vite 8 replaced esbuild with Oxc as the
+  // default transformer, at which point the old key was silently ignored rather
+  // than reported. A plugin would work too; one option is less to install.
+  oxc: {
+    jsx: { runtime: "automatic", importSource: "react" },
   },
   resolve: {
     alias: {
