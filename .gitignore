@@ -20,8 +20,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files (including the .env.example templates, which stay local)
 .env*
+
+# macOS
+.DS_Store
 
 # vercel
 .vercel
