@@ -3,7 +3,20 @@
 
 /** The game launched April 1, 2026; "All time" spans from that date. */
 export const LAUNCH_DATE_UTC = Date.UTC(2026, 3, 1);
-export const API_MAX_DAYS = 3650;
+
+/**
+ * Largest `days` the stats endpoint accepts, mirroring MAX_STATS_DAYS in
+ * backend/src/game-store.ts.
+ *
+ * This was 3650, matching the backend's old bound, and both were wrong: the
+ * stats RPC returns one row per day and PostgREST caps a response at 1000 rows,
+ * so a longer range silently answered the wrong window. The backend now refuses
+ * anything above this, so asking for more would turn "All time" into a 400.
+ *
+ * Nothing changes for players today. "All time" is measured from LAUNCH_DATE_UTC,
+ * so this ceiling does not bind until late 2028.
+ */
+export const API_MAX_DAYS = 1000;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const MONTHS = [
