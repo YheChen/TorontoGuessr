@@ -9,6 +9,7 @@ import {
   getLeaderboard,
   getRoundForClient,
   getTorontoDateKey,
+  MAX_STATS_DAYS,
   saveUsername,
   seedFromString,
   submitGuess,
@@ -165,8 +166,12 @@ const streakImportSchema = z.object({
   bestStreak: z.number().int().min(0).max(10_000),
 });
 
+// Bounded by MAX_STATS_DAYS rather than by a round number. Past it the stats RPC
+// hits PostgREST's 1000-row cap, which drops the NEWEST days and answers a window
+// nobody asked for, so an out-of-range request is refused here instead of being
+// served wrong. See the constant's comment in game-store.ts.
 const gameStatsQuerySchema = z.object({
-  days: z.coerce.number().int().min(1).max(3650).optional(),
+  days: z.coerce.number().int().min(1).max(MAX_STATS_DAYS).optional(),
   timeZone: z.string().trim().min(1).max(100).optional(),
 });
 

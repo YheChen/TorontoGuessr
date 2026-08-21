@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysSinceLaunch, formatDay } from "@/lib/date-toronto";
+import { API_MAX_DAYS, daysSinceLaunch, formatDay } from "@/lib/date-toronto";
 
 describe("daysSinceLaunch", () => {
   it("is 1 on launch day (Toronto time)", () => {
@@ -20,7 +20,18 @@ describe("daysSinceLaunch", () => {
   });
 
   it("clamps to the API maximum for far-future dates", () => {
-    expect(daysSinceLaunch(new Date("2050-01-01T12:00:00Z"))).toBe(3650);
+    expect(daysSinceLaunch(new Date("2050-01-01T12:00:00Z"))).toBe(API_MAX_DAYS);
+  });
+
+  // The backend refuses anything above API_MAX_DAYS, so a value derived from it
+  // must never exceed it: that would turn "All time" into a 400 rather than a
+  // shorter chart.
+  it("never exceeds what the stats endpoint accepts", () => {
+    for (const iso of ["2026-04-01", "2029-01-01", "2050-01-01", "2199-12-31"]) {
+      expect(daysSinceLaunch(new Date(`${iso}T12:00:00Z`))).toBeLessThanOrEqual(
+        API_MAX_DAYS
+      );
+    }
   });
 });
 

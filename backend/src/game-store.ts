@@ -38,6 +38,43 @@ const GAME_SESSION_COLUMNS_BASE =
   "id,username,rounds,current_round_index,total_rounds,total_score,results,rounds_played,status,created_at,completed_at";
 const DEFAULT_STATS_DAYS = 30;
 const DEFAULT_STATS_TIME_ZONE = "America/Toronto";
+
+/**
+ * The longest range the stats endpoint can answer correctly.
+ *
+ * daily_game_stats returns one row per day and PostgREST caps a response at
+ * 1000 rows, so a longer range is not merely truncated, it returns the WRONG
+ * WINDOW. The cap keeps the FIRST 1000 rows and the function orders by day
+ * ascending, so it is the newest days that get dropped, which are the only ones
+ * with any data in them.
+ *
+ * Measured against production on 2026-08-21, which is why the number is 1000
+ * exactly and not a guess: days=1000 returned 1000 rows ending today, days=1001
+ * returned 1000 rows ending YESTERDAY (silently losing today's games), and
+ * days=1200 returned a window that ended six months ago with every total at 0.
+ *
+ * The row-scan fallback below is capped at 1000 rows too, so it is no safer for
+ * a long range and cannot be used as an escape hatch. Raising this ceiling means
+ * paging the RPC, not relaxing the bound.
+ *
+ * frontend/lib/date-toronto.ts mirrors this as API_MAX_DAYS.
+ */
+export const MAX_STATS_DAYS = 1000;
+
+/**
+ * A day count the stats query can actually serve.
+ *
+ * The router rejects an out-of-range value outright, so in practice this only
+ * ever sees a value already in range. It exists so that a caller reaching
+ * getDailyGameStats directly (a script, a test, a future route) cannot ask for a
+ * window the database will silently answer wrongly.
+ */
+export function clampStatsDays(days: number): number {
+  if (!Number.isFinite(days)) {
+    return DEFAULT_STATS_DAYS;
+  }
+  return Math.min(Math.max(1, Math.trunc(days)), MAX_STATS_DAYS);
+}
 export const ROUND_TIME_LIMIT_SECONDS = 60;
 // Allowance on top of the round timer for network latency and clock skew
 // before a guess is treated as a timeout.
@@ -1065,16 +1102,28 @@ export async function getDailyGameStats({
   const normalizedTimeZone = isValidTimeZone(timeZone)
     ? timeZone
     : DEFAULT_STATS_TIME_ZONE;
+  const boundedDays = clampStatsDays(days);
 
   // Prefer the SQL aggregate: exact counts regardless of row volume, and one
   // round trip instead of two capped row scans.
   if (statsRpcAvailable) {
     try {
       const payload = await callRpc<unknown>("daily_game_stats", {
-        days_count: days,
+        days_count: boundedDays,
         tz: normalizedTimeZone,
       });
       const rows = z.array(dailyStatsRpcRowSchema).parse(payload);
+
+      // generate_series always produces exactly days_count rows, so a short
+      // response means the row cap trimmed it and the window is not the one that
+      // was asked for. Say so rather than serving it as if it were.
+      if (rows.length !== boundedDays) {
+        console.warn(
+          `[game-store] daily_game_stats returned ${rows.length} rows for ${boundedDays} days; ` +
+            `the response was truncated by the row cap and the newest days are missing. ` +
+            `Lower MAX_STATS_DAYS or page the RPC.`
+        );
+      }
 
       const series: DailyStatsEntry[] = rows.map((row) => ({
         date: row.date,
@@ -1082,7 +1131,7 @@ export async function getDailyGameStats({
         gamesFinished: row.games_finished,
       }));
 
-      return buildStatsResponse(days, normalizedTimeZone, series);
+      return buildStatsResponse(boundedDays, normalizedTimeZone, series);
     } catch (error) {
       // Missing function (migration not applied yet) or transient failure:
       // fall back to the legacy row scan so stats keep working.
@@ -1095,7 +1144,7 @@ export async function getDailyGameStats({
     }
   }
 
-  return getDailyGameStatsFromRows(days, normalizedTimeZone);
+  return getDailyGameStatsFromRows(boundedDays, normalizedTimeZone);
 }
 
 /**

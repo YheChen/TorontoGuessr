@@ -979,7 +979,7 @@ Base path `/api`. Rate limits are per IP per 60 seconds.
 | `POST /games/:sessionId/challenge` | 10 | `x-play-token`; finished games only |
 | `POST /games/:sessionId/username` | 40 | `x-play-token`; names a finished game on the board |
 | `GET /leaderboard` | 60 | `period=lifetime\|daily\|weekly\|monthly`, `board=global\|challenge`, `page`, `limit`; CDN-cached 30s |
-| `GET /stats/games` | 30 | `days=1..3650`, `timeZone`; CDN-cached 60s |
+| `GET /stats/games` | 30 | `days=1..1000`, `timeZone`; CDN-cached 60s |
 | `POST /lobbies` | 10 | |
 | `POST /lobbies/:code/join` | 20 | |
 | `GET /lobbies/:code/state` | 120 | `x-player-token`; never cached |
