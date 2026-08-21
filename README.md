@@ -1,6 +1,6 @@
 # TorontoGuessr
 
-A Toronto Street View location-guessing game with **3,871 games played** by real
+A Toronto Street View location-guessing game with **3,800+ games played** by real
 players. Live at **[www.torontoguessr.ca](https://www.torontoguessr.ca)**.
 
 **[Play now](https://www.torontoguessr.ca)** ·
@@ -19,12 +19,12 @@ sign-up needed to play.
 
 | | |
 | --- | --- |
-| **3,871 games started, 1,828 finished** | verifiable live from the public [stats endpoint](#api) |
-| **Google Street View + Maps JS API** | live panoramas, not pre-downloaded images |
+| **3,800+ games started, 1,800+ finished** | verifiable live from the public [stats endpoint](#api) |
+| **1,080 Google Street View panoramas** | live via the Maps JS API; 866 human-reviewed, 214 rejected as unplayable |
 | **Next.js 15 / React 19 on Vercel** | App Router, server-rendered marketing pages, client game stage |
 | **Supabase Postgres, service-role only** | RLS enabled with zero policies on all six tables |
 | **Server-authoritative scoring** | answer coordinates never reach the browser |
-| **316 unit tests + browser suite** | plus CodeQL, a 15-minute production smoke test, and Dependabot |
+| **324 unit tests + browser suite** | plus CodeQL, a 15-minute production smoke test, and Dependabot |
 
 <!--
 SCREENSHOTS GO HERE. Capture the five images listed in the project notes, drop
@@ -55,6 +55,7 @@ them in docs/screenshots/, and uncomment this block:
 - [Production engineering](#production-engineering)
 - [Engineering problems worth reading about](#engineering-problems-worth-reading-about)
 - [Real-world usage](#real-world-usage)
+- [Measured latency](#measured-latency)
 - [Testing](#testing)
 - [Project structure](#project-structure)
 - [Local development](#local-development)
@@ -281,7 +282,8 @@ game rather than failing a request over a cache miss.
 does not say the panorama is a street: indoor business photospheres, transit
 station interiors, and parking garages all validate fine and are unguessable.
 That is what the [admin review tool](#admin-review-and-moderation) exists for,
-and why `pick_game_rounds` orders reviewed locations first.
+and why `pick_game_rounds` orders reviewed locations first. It is not a small
+effect: **214 of the 1,080 validated panoramas, 19.8%, were rejected on review.**
 
 **Serving the panorama without the answer.** The client is handed a `pano_id`,
 never coordinates. `StreetViewPanorama` renders from a pano id alone, so the
@@ -446,11 +448,14 @@ would itself leak) and no length information escapes.
 ### Caching and API cost
 
 - **Location cache.** One Street View metadata request per location for its
-  whole lifetime, instead of one per round it is used in.
+  whole lifetime, instead of one per round it is used in. Measured: 1,080
+  cached panoramas have served 9,155+ rounds.
 - **CDN caching on read routes.** The leaderboard sets
   `s-maxage=30, stale-while-revalidate=60`; stats set
   `s-maxage=60, stale-while-revalidate=300`. Both are set *only on success*, so
-  an error response is never cached.
+  an error response is never cached. Measured from outside: an edge hit returns
+  in ~41ms against ~131ms for the cheapest route that always invokes the
+  function. See [measured latency](#measured-latency).
 - **CORS preflight cached for a day** (`Access-Control-Max-Age: 86400`), so
   gameplay POSTs pay the preflight at most once per day rather than before
   every request.
@@ -561,7 +566,8 @@ next, and **undo last action** (which returns the row to `pending` and the queue
 to that specific location). Accepting sets `manually_verified = true`, which is
 what `pick_game_rounds` orders on; rejecting removes the row from both the queue
 and the playable pool. There is a bulk `DELETE .../rejected` for reclaiming
-space once rejections pile up.
+space once rejections pile up. As of 2026-08-21 the queue is fully cleared: 866
+accepted, 214 rejected, 0 pending.
 
 ### Observability
 
@@ -689,35 +695,79 @@ otherwise trip a feature flag.
 
 ## Real-world usage
 
-Sampled from the live production API on 2026-08-20. Both numbers come from
-public endpoints, so they can be re-checked at any time:
-
-| Metric | Value |
-| --- | --- |
-| Games started (all time) | **3,871** |
-| Games finished | **1,828** (47% completion) |
-| Days with recorded play | 134 |
-| First recorded play | 2026-04-07 |
-| Busiest day | 114 games started (2026-06-24) |
-| Highest score on the all-time board | 25,000 (a perfect game) |
+All figures below were measured against production on **2026-08-21**, not
+estimated. The traffic numbers come from public endpoints, so anyone can
+re-check them:
 
 ```bash
 curl "https://toronto-guessr-backend.vercel.app/api/stats/games?days=365"
+curl "https://toronto-guessr-backend.vercel.app/api/leaderboard?period=lifetime&limit=1"
 ```
+
+| Traffic | |
+| --- | --- |
+| Games started, all time | **3,877** |
+| Games finished | **1,831** (47% completion) |
+| Rounds scored | **9,155+** (five per finished game, plus abandoned ones) |
+| Days with recorded play | 134 |
+| First recorded play | 2026-04-07 |
+| Busiest day | 114 games started (2026-06-24) |
+| Highest score on the board | 25,000, a perfect game |
+| Finished games under a chosen name | 127 of 1,831; the rest are still `Guest NNNN` |
+
+| Location pool | |
+| --- | --- |
+| Panoramas validated and cached | **1,080** |
+| Accepted in review | 866 (80%) |
+| **Rejected as unplayable** | **214 (19.8%)** |
+| Awaiting review | 0, the queue is clear |
+| Rows missing a `pano_id` | 0 |
+
+That **19.8% rejection rate is the number that justifies the review tool.** One
+in five panoramas that the Street View Metadata API confirmed as existing turned
+out to be unplayable: an indoor photosphere, a transit interior, a parking
+garage. No API call can tell you that, so without a human pass one round in five
+would be unguessable.
+
+The pool also shows what the cache is worth. Those 1,080 panoramas cost exactly
+1,080 Street View metadata requests in total, once each, and have served 9,155+
+rounds since. Without the cache that would have been one metadata request per
+round.
+
+### Measured latency
+
+Twelve sequential requests per route from a residential connection, so these
+include real network time and are an upper bound on what the server costs:
+
+| Route | min | p50 | p95 |
+| --- | --- | --- | --- |
+| `GET /health` (always invokes the function) | 131ms | 149ms | 388ms |
+| `GET /leaderboard` (CDN, `s-maxage=30`) | **41ms** | 98ms | 260ms |
+| `GET /stats/games?days=30` (CDN, `s-maxage=60`) | **42ms** | 83ms | 191ms |
+
+The cached routes beat `/health` even though they do strictly more work, which is
+the CDN layer showing up in the numbers: an edge hit lands around 41ms while any
+function invocation starts at ~131ms.
 
 The game is also live in the app itself at
 [/stats](https://www.torontoguessr.ca/stats), which charts games started and
 finished per day over a selectable range.
 
+Not yet instrumented, and honestly so: there is no server-side percentile
+breakdown per route (the `[timing]` lines carry the data but nothing aggregates
+them), and unique-player counts live only in Umami, since guests are
+unattributed in the database by design. Every number on this page is games, not
+people.
+
 ---
 
 ## Testing
 
-**316 unit tests** across the two workspaces, run on every PR:
+**324 unit tests** across the two workspaces, run on every PR:
 
 ```bash
-npm run test --workspace backend    # 187 tests
-npm run test --workspace frontend   # 129 tests
+npm run test --workspace backend    # 194 tests
+npm run test --workspace frontend   # 130 tests
 ```
 
 The backend suite covers the pieces where a bug is expensive and hard to see:
@@ -925,8 +975,8 @@ Frontend on `http://localhost:3000`, backend on `http://localhost:3001`.
 ```bash
 npm run dev                                   # both workspaces
 npm run build                                 # typecheck backend + build frontend
-npm run test --workspace backend              # 187 unit tests
-npm run test --workspace frontend             # 129 unit tests
+npm run test --workspace backend              # 194 unit tests
+npm run test --workspace frontend             # 130 unit tests
 npm run typecheck --workspace frontend
 npm run lint --workspace frontend
 npm run e2e --workspace frontend              # Playwright, needs a deployed origin
