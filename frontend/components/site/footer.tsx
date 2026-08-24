@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Github, MapPin } from "lucide-react";
+import { ExternalLink, MapPin } from "lucide-react";
 import { BrandMark } from "@/components/site/brand-mark";
 import { FooterBackdrop } from "@/components/site/footer-backdrop";
 
@@ -58,7 +58,7 @@ export function Footer() {
                           rel="noreferrer"
                           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                         >
-                          <Github className="size-3.5" />
+                          <ExternalLink className="size-3.5" />
                           {link.label}
                         </a>
                       ) : (
