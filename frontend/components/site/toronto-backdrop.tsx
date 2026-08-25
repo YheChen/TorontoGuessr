@@ -10,7 +10,7 @@ export function TorontoBackdrop() {
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
     >
       {/* base vertical wash */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-secondary/40" />
+      <div className="absolute inset-0 bg-linear-to-b from-background via-background to-secondary/40" />
 
       {/* cartographic grid, masked to fade toward the edges */}
       <div

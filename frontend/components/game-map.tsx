@@ -260,7 +260,7 @@ export function GameMap({
             mapPaneName={OverlayView.FLOAT_PANE}
             getPixelPositionOffset={centerOverlay}
           >
-            <span className="pointer-events-none select-none whitespace-nowrap rounded-full bg-card/95 px-2 py-0.5 text-[11px] font-semibold tabular text-foreground shadow-soft ring-1 ring-border/70 backdrop-blur">
+            <span className="pointer-events-none select-none whitespace-nowrap rounded-full bg-card/95 px-2 py-0.5 text-[11px] font-semibold tabular text-foreground shadow-soft ring-1 ring-border/70 backdrop-blur-sm">
               {guessDistanceLabel}
             </span>
           </OverlayViewF>
@@ -318,7 +318,7 @@ export function GameMap({
                   // text with them would be unreadable for some players and
                   // unreadable in dark mode for more. A 2px band gives the same
                   // association with none of that.
-                  className="pointer-events-none select-none whitespace-nowrap rounded-full border-2 bg-card/95 px-2 py-0.5 text-[11px] font-semibold tabular text-foreground shadow-soft backdrop-blur"
+                  className="pointer-events-none select-none whitespace-nowrap rounded-full border-2 bg-card/95 px-2 py-0.5 text-[11px] font-semibold tabular text-foreground shadow-soft backdrop-blur-sm"
                   style={{ borderColor: pin.color }}
                   title={pin.label}
                 >
@@ -334,7 +334,7 @@ export function GameMap({
         onClick={toggleMapTheme}
         aria-label={`Switch map to ${isDark ? "light" : "dark"} appearance`}
         title={`Switch map to ${isDark ? "light" : "dark"} appearance`}
-        className="absolute right-2 top-2 z-10 grid size-8 place-items-center rounded-full bg-card/90 text-foreground shadow-soft ring-1 ring-border backdrop-blur transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute right-2 top-2 z-10 grid size-8 place-items-center rounded-full bg-card/90 text-foreground shadow-soft ring-1 ring-border backdrop-blur-sm transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
       </button>

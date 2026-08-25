@@ -69,7 +69,7 @@ export default function Home() {
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
           <div className="animate-fade-up">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm">
                 <span className="size-1.5 rounded-full bg-toronto-red" />
                 A street-guessing game for the 6ix
               </span>
@@ -156,7 +156,7 @@ export default function Home() {
               // vertical bleed stays: it has nothing to escape. blur-3xl already
               // spreads the halo 64px past this box, so losing 24px of box on
               // each side is not visible.
-              className="absolute inset-x-0 -inset-y-6 -z-10 rounded-[2rem] bg-primary/20 blur-3xl"
+              className="absolute inset-x-0 -inset-y-6 -z-10 rounded-4xl bg-primary/20 blur-3xl"
               aria-hidden="true"
             />
             <div className="animate-float">
@@ -273,7 +273,7 @@ export default function Home() {
               aria-hidden="true"
             />
             <div
-              className="absolute inset-x-0 bottom-0 -z-10 text-primary/10 dark:text-white/[0.06]"
+              className="absolute inset-x-0 bottom-0 -z-10 text-primary/10 dark:text-white/6"
               aria-hidden="true"
             >
               <Skyline className="h-32 sm:h-44" />

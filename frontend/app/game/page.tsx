@@ -551,7 +551,7 @@ export default function Game() {
                     inResults && "hidden",
                   )}
                 >
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     <MapPin className="size-3.5 text-toronto-red" />
                     Your guess
                   </span>

@@ -151,7 +151,7 @@ export function ReviewLocationPanorama({
   return (
     <div className="relative h-[58vh] min-h-[420px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60">
       {!isPanoramaReady && !panoramaError && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/65 text-white backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/65 text-white backdrop-blur-xs">
           <Spinner size={30} />
           <p className="text-sm text-white/80">Loading Street View…</p>
         </div>

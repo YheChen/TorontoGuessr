@@ -134,7 +134,7 @@ export function StatsClient() {
 
         {/* Range segmented control */}
         <div className="-mx-1 overflow-x-auto px-1 pb-1 sm:self-auto">
-          <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
+          <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur-sm">
           {RANGE_OPTIONS.map((option) => {
             const isActive = option.key === range;
             return (

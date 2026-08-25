@@ -227,7 +227,7 @@ export default function Leaderboard() {
       {/* Board + period controls + summary */}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
+          <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur-sm">
             {(
               [
                 { value: "global", label: "Global" },
@@ -256,7 +256,7 @@ export default function Leaderboard() {
 
           {board === "global" && (
             <div className="-mx-1 overflow-x-auto px-1 pb-1">
-              <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur">
+              <div className="inline-flex rounded-full border border-border/70 bg-muted/60 p-1 backdrop-blur-sm">
                 {LEADERBOARD_OPTIONS.map((option) => {
                   const isActive = option.value === period;
                   return (
