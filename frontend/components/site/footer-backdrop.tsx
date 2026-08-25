@@ -1,35 +1,30 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import { Skyline } from "@/components/site/skyline";
 
 /**
- * Drop a Toronto skyline image at this public path to use it as the footer
- * background. PNG (transparent) or SVG both work, just match this filename.
+ * Public path to custom footer artwork, or null to use the vector skyline.
+ *
+ * Naming a file here is the switch. To use your own artwork, drop it in
+ * frontend/public (PNG with transparency, or SVG) and set this to its path.
+ *
+ * This used to be hardcoded to "/toronto-skyline.png" and probed for on mount
+ * with new Image(), falling back to the vector when the request failed. The
+ * fallback worked, so the footer always looked right, but the file was never
+ * added: every visitor on every page load fetched a missing asset, took a 404,
+ * and logged a console error, all to support artwork nobody had supplied. A
+ * constant costs nothing and cannot 404.
  */
-const SKYLINE_SRC = "/toronto-skyline.png";
+const SKYLINE_SRC: string | null = null;
 
 // Fade the top of the artwork so footer text stays readable above it.
 const FADE_MASK = "linear-gradient(to top, black 45%, transparent)";
 
 export function FooterBackdrop() {
-  // Default to the vector skyline; swap in the custom image only once it has
-  // verifiably loaded, so a missing file never flashes a broken-image icon.
-  const [hasImage, setHasImage] = useState(false);
-
-  useEffect(() => {
-    const probe = new window.Image();
-    probe.onload = () => setHasImage(true);
-    probe.onerror = () => setHasImage(false);
-    probe.src = SKYLINE_SRC;
-  }, []);
-
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none absolute inset-x-0 bottom-0 z-0 overflow-hidden"
     >
-      {hasImage ? (
+      {SKYLINE_SRC ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={SKYLINE_SRC}
