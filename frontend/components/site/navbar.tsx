@@ -42,13 +42,13 @@ export function Navbar() {
         "sticky top-0 z-50 w-full transition-shadow duration-300",
         scrolled
           ? "glass-strong shadow-soft"
-          : "border-b border-transparent bg-background/40 backdrop-blur-sm",
+          : "border-b border-transparent bg-background/40 backdrop-blur-xs",
       )}
     >
       <div className="container flex h-16 items-center justify-between gap-4">
         <Link
           href="/"
-          className="group flex items-center rounded-lg outline-none"
+          className="group flex items-center rounded-lg outline-hidden"
           aria-label="TorontoGuessr home"
         >
           <BrandMark

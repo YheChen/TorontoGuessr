@@ -38,7 +38,7 @@ export function FooterBackdrop() {
           className="h-auto w-full select-none object-cover object-bottom opacity-20 dark:opacity-25"
         />
       ) : (
-        <div className="text-toronto-navy/[0.07] dark:text-white/[0.06]">
+        <div className="text-toronto-navy/[0.07] dark:text-white/6">
           <Skyline className="h-40 w-full sm:h-48" />
         </div>
       )}

@@ -224,7 +224,7 @@ export function AccountClient() {
             ) : (
               <>
                 <div className="surface-card mt-4 overflow-x-auto rounded-2xl">
-                  <table className="w-full min-w-[28rem] text-sm">
+                  <table className="w-full min-w-md text-sm">
                     <thead>
                       <tr className="border-b border-border/70 text-left text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         <th className="px-5 py-3">Date</th>

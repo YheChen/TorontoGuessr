@@ -1,6 +1,283 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@source '../*.{js,ts,jsx,tsx,mdx}';
+
+@custom-variant dark (&:is(.dark *));
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+  @media (width >= 1280px) {
+    max-width: 1280px;
+  }
+}
+
+@theme {
+  --font-sans: var(--font-sans), system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-toronto-navy: hsl(var(--toronto-navy));
+  --color-toronto-azure: hsl(var(--toronto-azure));
+  --color-toronto-sky: hsl(var(--toronto-sky));
+  --color-toronto-red: hsl(var(--toronto-red));
+  --color-toronto-gold: hsl(var(--gold));
+
+  --color-medal-gold: hsl(var(--medal-gold));
+  --color-medal-silver: hsl(var(--medal-silver));
+  --color-medal-bronze: hsl(var(--medal-bronze));
+
+  --radius-2xl: calc(var(--radius) + 6px);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 8px);
+
+  --shadow-soft:
+    0 1px 2px hsl(220 40% 10% / 0.04), 0 8px 24px -12px hsl(220 40% 10% / 0.18);
+  --shadow-elevated:
+    0 4px 12px -4px hsl(220 40% 10% / 0.12),
+    0 16px 40px -16px hsl(220 40% 10% / 0.28);
+  --shadow-glow:
+    0 0 0 1px hsl(var(--primary) / 0.2),
+    0 10px 30px -10px hsl(var(--primary) / 0.45);
+  --shadow-inner-top: inset 0 1px 0 0 hsl(0 0% 100% / 0.06);
+
+  --background-image-grid-fade: radial-gradient(
+    ellipse 80% 60% at 50% 0%,
+    hsl(var(--glow) / 0.12),
+    transparent 70%
+  );
+
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility glass {
+  /* Layered glass surface used by floating panels / HUD */
+  background-color: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid hsl(var(--border) / 0.8);
+}
+
+@utility glass-strong {
+  background-color: hsl(var(--card) / 0.86);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid hsl(var(--border) / 0.9);
+}
+
+@utility surface-card {
+  /* Premium elevated card */
+  background: linear-gradient(
+    180deg,
+    hsl(var(--card)) 0%,
+    hsl(var(--card) / 0.92) 100%
+  );
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    0 1px 0 0 hsl(var(--foreground) / 0.02) inset,
+    0 1px 2px hsl(220 40% 10% / 0.04),
+    0 8px 24px -12px hsl(220 40% 10% / 0.18);
+  .dark & {
+    box-shadow:
+      0 1px 0 0 hsl(0 0% 100% / 0.04) inset,
+      0 2px 6px hsl(0 0% 0% / 0.3),
+      0 16px 40px -16px hsl(0 0% 0% / 0.6);
+  }
+}
+
+@utility dark {
+  & .surface-card {
+    box-shadow:
+      0 1px 0 0 hsl(0 0% 100% / 0.04) inset,
+      0 2px 6px hsl(0 0% 0% / 0.3),
+      0 16px 40px -16px hsl(0 0% 0% / 0.6);
+  }
+}
+
+@utility text-gradient {
+  /* Soft brand gradient text */
+  background: linear-gradient(
+    120deg,
+    hsl(var(--toronto-azure)),
+    hsl(var(--toronto-sky))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility hairline {
+  /* Hairline divider */
+  border-color: hsl(var(--border) / 0.7);
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@utility text-pretty {
+  text-wrap: pretty;
+}
+
+@utility bg-map-grid {
+  /* Cartographic grid texture for backgrounds */
+  background-image:
+    linear-gradient(to right, hsl(var(--grid-line) / 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--grid-line) / 0.5) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+@utility bg-map-grid-fine {
+  background-image:
+    linear-gradient(
+      to right,
+      hsl(var(--grid-line) / 0.35) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      hsl(var(--grid-line) / 0.35) 1px,
+      transparent 1px
+    );
+  background-size: 24px 24px;
+}
+
+@utility bg-spotlight {
+  /* Radial spotlight glow */
+  background: radial-gradient(
+    60% 50% at 50% 0%,
+    hsl(var(--glow) / 0.16) 0%,
+    transparent 70%
+  );
+}
+
+@utility animate-fade-up {
+  /* Animation entrances */
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.5s ease both;
+}
+
+@utility animate-scale-in {
+  animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@utility animate-marker-drop {
+  animation: marker-drop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@utility animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@utility animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+@utility animate-pulse-ring {
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@utility delay-75 {
+  /* Stagger helpers */
+  animation-delay: 75ms;
+}
+
+@utility delay-150 {
+  animation-delay: 150ms;
+}
+
+@utility delay-225 {
+  animation-delay: 225ms;
+}
+
+@utility delay-300 {
+  animation-delay: 300ms;
+}
+
+@utility delay-450 {
+  animation-delay: 450ms;
+}
+
+@utility delay-600 {
+  animation-delay: 600ms;
+}
 
 /*
   TorontoGuessr design system: "Cartographic Premium"
@@ -178,126 +455,6 @@
   *::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--muted-foreground) / 0.55);
   }
-}
-
-@layer components {
-  /* Layered glass surface used by floating panels / HUD */
-  .glass {
-    background-color: hsl(var(--card) / 0.72);
-    backdrop-filter: blur(16px) saturate(150%);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
-    border: 1px solid hsl(var(--border) / 0.8);
-  }
-
-  .glass-strong {
-    background-color: hsl(var(--card) / 0.86);
-    backdrop-filter: blur(22px) saturate(160%);
-    -webkit-backdrop-filter: blur(22px) saturate(160%);
-    border: 1px solid hsl(var(--border) / 0.9);
-  }
-
-  /* Premium elevated card */
-  .surface-card {
-    background:
-      linear-gradient(
-        180deg,
-        hsl(var(--card)) 0%,
-        hsl(var(--card) / 0.92) 100%
-      );
-    border: 1px solid hsl(var(--border));
-    box-shadow:
-      0 1px 0 0 hsl(var(--foreground) / 0.02) inset,
-      0 1px 2px hsl(220 40% 10% / 0.04),
-      0 8px 24px -12px hsl(220 40% 10% / 0.18);
-  }
-  .dark .surface-card {
-    box-shadow:
-      0 1px 0 0 hsl(0 0% 100% / 0.04) inset,
-      0 2px 6px hsl(0 0% 0% / 0.3),
-      0 16px 40px -16px hsl(0 0% 0% / 0.6);
-  }
-
-  /* Soft brand gradient text */
-  .text-gradient {
-    background: linear-gradient(
-      120deg,
-      hsl(var(--toronto-azure)),
-      hsl(var(--toronto-sky))
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  /* Hairline divider */
-  .hairline {
-    border-color: hsl(var(--border) / 0.7);
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  .text-pretty {
-    text-wrap: pretty;
-  }
-
-  /* Cartographic grid texture for backgrounds */
-  .bg-map-grid {
-    background-image:
-      linear-gradient(to right, hsl(var(--grid-line) / 0.5) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--grid-line) / 0.5) 1px, transparent 1px);
-    background-size: 56px 56px;
-  }
-  .bg-map-grid-fine {
-    background-image:
-      linear-gradient(to right, hsl(var(--grid-line) / 0.35) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--grid-line) / 0.35) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
-
-  /* Radial spotlight glow */
-  .bg-spotlight {
-    background:
-      radial-gradient(
-        60% 50% at 50% 0%,
-        hsl(var(--glow) / 0.16) 0%,
-        transparent 70%
-      );
-  }
-
-  /* Animation entrances */
-  .animate-fade-up {
-    animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .animate-fade-in {
-    animation: fade-in 0.5s ease both;
-  }
-  .animate-scale-in {
-    animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .animate-marker-drop {
-    animation: marker-drop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-  .animate-shimmer {
-    background-size: 200% 100%;
-    animation: shimmer 1.6s linear infinite;
-  }
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-  .animate-pulse-ring {
-    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* Stagger helpers */
-  .delay-75 { animation-delay: 75ms; }
-  .delay-150 { animation-delay: 150ms; }
-  .delay-225 { animation-delay: 225ms; }
-  .delay-300 { animation-delay: 300ms; }
-  .delay-450 { animation-delay: 450ms; }
-  .delay-600 { animation-delay: 600ms; }
 }
 
 @keyframes fade-up {

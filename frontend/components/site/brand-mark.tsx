@@ -57,7 +57,7 @@ export function BrandMark({
         />
       ) : (
         <span
-          className="relative grid shrink-0 place-items-center rounded-[30%] bg-gradient-to-br from-toronto-azure to-toronto-sky text-white shadow-glow ring-1 ring-inset ring-white/20"
+          className="relative grid shrink-0 place-items-center rounded-[30%] bg-linear-to-br from-toronto-azure to-toronto-sky text-white shadow-glow ring-1 ring-inset ring-white/20"
           style={{ width: size, height: size }}
           aria-hidden="true"
         >

@@ -65,7 +65,7 @@ export function LeaderboardPodium({
           >
             <div
               className={cn(
-                "pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent",
+                "pointer-events-none absolute inset-x-0 top-0 h-24 bg-linear-to-b to-transparent",
                 medal.bar,
               )}
               aria-hidden="true"

@@ -787,7 +787,7 @@ export function LobbyRoom({ joinCode }: { joinCode: string }) {
         <div className="mt-3 lg:absolute lg:bottom-6 lg:right-6 lg:z-20 lg:mt-0 lg:w-[340px] xl:w-[380px]">
           <div className="glass-strong overflow-hidden rounded-2xl shadow-elevated">
             <div className="flex items-center justify-between gap-2 px-3.5 pt-3">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 <MapPin className="size-3.5 text-toronto-red" />
                 Your guess
               </span>

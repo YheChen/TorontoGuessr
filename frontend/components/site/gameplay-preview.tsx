@@ -11,7 +11,7 @@ export function GameplayPreview({ className }: { className?: string }) {
     <div
       aria-hidden="true"
       className={cn(
-        "glass-strong relative aspect-[4/3] w-full overflow-hidden rounded-3xl shadow-elevated ring-1 ring-white/10",
+        "glass-strong relative aspect-4/3 w-full overflow-hidden rounded-3xl shadow-elevated ring-1 ring-white/10",
         className,
       )}
     >
@@ -21,7 +21,7 @@ export function GameplayPreview({ className }: { className?: string }) {
         alt=""
         className="absolute inset-0 size-full object-cover"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/30" />
+      <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/10 to-black/30" />
 
       {/* top HUD row */}
       <div className="absolute inset-x-4 top-4 flex items-center justify-between">

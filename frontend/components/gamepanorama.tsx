@@ -98,7 +98,7 @@ export default function GamePanorama({
       className="relative h-full min-h-[320px] w-full overflow-hidden rounded-2xl bg-black ring-1 ring-border/60"
     >
       {(!isLoaded || !loaded) && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 text-white backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 text-white backdrop-blur-xs">
           <Spinner size={32} />
           <p className="text-sm font-medium text-white/80">
             {isLoaded ? "Loading Street View…" : "Loading Google Maps…"}

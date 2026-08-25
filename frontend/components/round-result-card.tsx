@@ -121,7 +121,7 @@ export function RoundResultCard({
         {/* score meter */}
         <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-toronto-azure to-toronto-sky transition-[width] duration-1000 ease-spring"
+            className="h-full rounded-full bg-linear-to-r from-toronto-azure to-toronto-sky transition-[width] duration-1000 ease-spring"
             style={{ width: `${scorePct}%` }}
           />
         </div>
