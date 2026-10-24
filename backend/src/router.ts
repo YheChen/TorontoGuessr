@@ -53,6 +53,7 @@ import {
   logRequestTiming,
 } from "./observability.js";
 import { enforceRateLimit } from "./rate-limit.js";
+import { getHomeStats } from "./home-stats.js";
 import { requireAdminToken } from "./admin-auth.js";
 import { readPlayToken } from "./play-token.js";
 import { readClientId, resolveDailyKey } from "./daily-attempt.js";
@@ -463,6 +464,31 @@ export async function routeRequest(
         "public, s-maxage=30, stale-while-revalidate=60"
       );
       sendJson(response, 200, leaderboard);
+      return;
+    }
+
+    if (request.method === "GET" && pathname === "/stats/home") {
+      // Takes no parameters, so unlike /stats/games there is no key space to
+      // walk past the CDN: one cached response serves everyone. The cap is here
+      // for the cold-cache case, where each request fans out into a dozen
+      // parallel counts.
+      enforceRateLimit(
+        request,
+        response,
+        "stats-home",
+        { limit: 30 },
+        "Too many stats requests from this address. Please slow down."
+      );
+
+      const stats = await getHomeStats();
+      // Five minutes: these are lifetime totals that move by single digits an
+      // hour, and the homepage revalidates against this rather than querying per
+      // visitor. Set only on success so errors are never cached.
+      response.setHeader(
+        "Cache-Control",
+        "public, s-maxage=300, stale-while-revalidate=900"
+      );
+      sendJson(response, 200, stats);
       return;
     }
 

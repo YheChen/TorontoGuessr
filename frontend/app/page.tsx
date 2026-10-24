@@ -1,301 +1,197 @@
 import Link from "next/link";
-import {
-  Play,
-  Trophy,
-  Eye,
-  Crosshair,
-  ArrowRight,
-  Timer,
-  Target,
-  Map as MapIcon,
-  Building2,
-  CalendarDays,
-  Check,
-  Users,
-} from "lucide-react";
+import { CalendarDays, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Reveal } from "@/components/site/reveal";
-import { SectionHeading } from "@/components/site/section-heading";
-import { GameplayPreview } from "@/components/site/gameplay-preview";
-import { StatCard } from "@/components/site/stat-card";
 import { StreakBadge } from "@/components/streak-badge";
-import { Skyline } from "@/components/site/skyline";
+import { fetchHomeStats, formatCount } from "@/lib/home-stats";
 
-const FEATURES = [
-  {
-    icon: Eye,
-    title: "Real Street View",
-    description:
-      "Authentic 360° panoramas pulled straight from Toronto's streets. Pan, zoom, and explore for clues.",
-  },
-  {
-    icon: Crosshair,
-    title: "Pin your guess",
-    description:
-      "Click the map to drop your marker. The closer you land, the more you score, up to 5,000 points a round.",
-  },
-  {
-    icon: Trophy,
-    title: "Climb the board",
-    description:
-      "Save your run and compete on daily, weekly, monthly, and all-time Toronto leaderboards.",
-  },
-] as const;
+/**
+ * The homepage shows what the game has actually done, not what its rules are.
+ *
+ * It used to carry a "By the numbers" row reading "Rounds per game: 5, Max
+ * points: 5000, Seconds per round: 60, Neighborhoods: 8+". Those are constants
+ * from the rulebook dressed as traction, and the last one was wrong by two
+ * orders of magnitude: 866 locations have been reviewed by hand. Everything
+ * below comes from /stats/home.
+ *
+ * There is deliberately no live activity feed. Play is concentrated enough that
+ * the most recent dozen finishes are often one person several times over, so a
+ * "right now" list would read as a single name repeated, or as nothing during a
+ * quiet hour. Lifetime totals and a score distribution are true at any hour.
+ */
+export default async function Home() {
+  const stats = await fetchHomeStats();
 
-const STEPS = [
-  {
-    title: "Look around",
-    description: "Pan and zoom the panorama to take in the whole scene.",
-  },
-  {
-    title: "Read the city",
-    description: "Spot landmarks, transit, signage, and architecture.",
-  },
-  {
-    title: "Drop your pin",
-    description: "Click the map where you think the photo was taken.",
-  },
-  {
-    title: "Score & climb",
-    description: "Earn points by distance across five rounds.",
-  },
-] as const;
+  const counts = stats
+    ? [
+        { value: formatCount(stats.gamesPlayed), label: "games played" },
+        { value: formatCount(stats.gamesFinished), label: "runs finished" },
+        {
+          value: formatCount(stats.locationsVerified),
+          label: "locations checked by hand",
+        },
+        { value: formatCount(stats.perfectRuns), label: "perfect runs" },
+      ]
+    : [];
 
-export default function Home() {
+  // The widest band sets the bar scale, so the shape stays readable whatever
+  // the distribution happens to be.
+  const widestBand = stats
+    ? Math.max(...stats.scoreBands.map((band) => band.count), 1)
+    : 1;
+
   return (
     <>
-      {/* ───────────────────────── Hero ───────────────────────── */}
-      <section className="container relative pt-12 sm:pt-16 lg:pt-20">
-        <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
-          <div className="animate-fade-up">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm">
-                <span className="size-1.5 rounded-full bg-toronto-red" />
-                A street-guessing game for the 6ix
-              </span>
-              {/* Client island: the streak lives in localStorage, and this page
-                  is a server component. Renders nothing without a live streak. */}
-              <StreakBadge />
-            </div>
+      <section className="container pt-14 sm:pt-20 lg:pt-24">
+        <div className="max-w-3xl">
+          <StreakBadge />
 
-            <h1 className="mt-6 text-balance text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl xl:text-7xl">
-              How well do you know{" "}
-              <span className="text-gradient">Toronto?</span>
-            </h1>
+          <h1 className="mt-2 text-balance text-5xl font-bold leading-[1.03] tracking-tight sm:text-6xl xl:text-[4.4rem]">
+            Guess where in Toronto you are.
+          </h1>
 
-            <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              Drop into a random Toronto street, read the signs, skyline, and
-              storefronts, then pin your best guess. Five rounds, one city,
-              pure local knowledge.
-            </p>
+          <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
+            Five real Street View locations, picked by hand from across the
+            city. Read the signage, the transit, the brick. Drop your pin.
+          </p>
 
-            {/* flex-wrap is load bearing, not tidiness. Four buttons in a
-                non-wrapping sm:flex-row have a combined min-content width of
-                877px, and a grid item cannot shrink below its min-content, so
-                between 640px and 1023px the whole hero column was forced to
-                877px and the page scrolled sideways by up to 281px. Wrapping
-                drops the min-content to one button. */}
-            <div className="mt-8 flex flex-col flex-wrap gap-3 sm:flex-row sm:items-center">
-              <Button asChild size="xl" className="rounded-2xl shadow-glow">
-                <Link href="/game">
-                  <Play className="size-5" />
-                  Play now
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="xl"
-                className="rounded-2xl bg-toronto-red text-white hover:bg-toronto-red/90"
-              >
-                <Link href="/game?mode=daily">
-                  <CalendarDays className="size-5" />
-                  Daily challenge
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="xl"
-                variant="outline"
-                className="rounded-2xl"
-              >
-                <Link href="/lobby">
-                  <Users className="size-5" />
-                  Play with friends
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="xl"
-                variant="outline"
-                className="rounded-2xl"
-              >
-                <Link href="/leaderboard">
-                  <Trophy className="size-5" />
-                  View leaderboard
-                </Link>
-              </Button>
-            </div>
-
-            <ul className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              {["No sign-up needed", "5 rounds per game", "Live leaderboard"].map(
-                (item) => (
-                  <li key={item} className="inline-flex items-center gap-2">
-                    <Check className="size-4 text-success" />
-                    {item}
-                  </li>
-                ),
-              )}
-            </ul>
-          </div>
-
-          <div className="relative animate-fade-up delay-150">
-            <div
-              // inset-x-0, not -inset-x-6. The container's padding is 20px and
-              // a 24px horizontal bleed overshot it by exactly 4px at every
-              // width, which is enough to make the page scroll sideways. The
-              // vertical bleed stays: it has nothing to escape. blur-3xl already
-              // spreads the halo 64px past this box, so losing 24px of box on
-              // each side is not visible.
-              className="absolute inset-x-0 -inset-y-6 -z-10 rounded-4xl bg-primary/20 blur-3xl"
-              aria-hidden="true"
-            />
-            <div className="animate-float">
-              <GameplayPreview />
-            </div>
+          <div className="mt-9 flex flex-col flex-wrap gap-3 sm:flex-row sm:items-center">
+            <Button asChild size="xl" className="rounded-xl">
+              <Link href="/game">
+                <Play className="size-5" />
+                Play a round
+              </Link>
+            </Button>
+            <Button asChild size="xl" variant="outline" className="rounded-xl">
+              <Link href="/game?mode=daily">
+                <CalendarDays className="size-5" />
+                Today&rsquo;s daily
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
 
-      {/* ─────────────────────── Features ─────────────────────── */}
-      <section className="container py-20 sm:py-28">
-        <div className="grid gap-6 md:grid-cols-3">
-          {FEATURES.map((feature, index) => (
-            <Reveal key={feature.title} delay={index * 90}>
-              <article className="surface-card group h-full rounded-2xl p-7 transition-transform duration-300 hover:-translate-y-1">
-                <span className="grid size-12 place-items-center rounded-2xl bg-accent text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                  <feature.icon className="size-6" />
-                </span>
-                <h3 className="mt-5 text-lg font-semibold tracking-tight">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {feature.description}
-                </p>
-              </article>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* ─────────────────────── How to play ─────────────────────── */}
-      <section className="container pb-20 sm:pb-28">
-        <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16">
-          <Reveal>
-            <SectionHeading
-              eyebrow="How to play"
-              title="Four steps to your first score"
-              description="No tutorial required. Start a game and you'll be guessing within seconds."
-            />
-            <div className="mt-8">
-              <Button asChild size="lg" className="rounded-xl">
-                <Link href="/game">
-                  Start a game
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </div>
-          </Reveal>
-
-          <ol className="grid gap-4 sm:grid-cols-2">
-            {STEPS.map((step, index) => (
-              <Reveal as="li" key={step.title} delay={index * 90}>
-                <div className="surface-card h-full rounded-2xl p-6">
-                  <span className="font-mono-accent text-sm font-semibold text-primary">
-                    {String(index + 1).padStart(2, "0")}
+      {counts.length > 0 && (
+        <section className="container pt-16 sm:pt-20">
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-4">
+            {counts.map((item) => (
+              <div key={item.label} className="bg-card px-6 py-7">
+                <dt className="sr-only">{item.label}</dt>
+                <dd>
+                  <span className="block font-mono-accent text-3xl font-semibold tracking-tight sm:text-4xl">
+                    {item.value}
                   </span>
-                  <h3 className="mt-3 text-base font-semibold">{step.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                    {step.description}
-                  </p>
-                </div>
-              </Reveal>
+                  <span className="mt-2 block text-sm leading-snug text-muted-foreground">
+                    {item.label}
+                  </span>
+                </dd>
+              </div>
             ))}
-          </ol>
-        </div>
-      </section>
+          </dl>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Every location is opened in Street View and approved by hand before
+            it enters the pool.
+          </p>
+        </section>
+      )}
 
-      {/* ─────────────────────── Stats ─────────────────────── */}
-      <section className="container pb-20 sm:pb-28">
-        <Reveal>
-          <SectionHeading
-            align="center"
-            eyebrow="By the numbers"
-            title="The game at a glance"
-            className="mx-auto items-center text-center"
-          />
-        </Reveal>
-        <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
-          <Reveal delay={0}>
-            <StatCard icon={MapIcon} label="Rounds per game" value={5} />
-          </Reveal>
-          <Reveal delay={90}>
-            <StatCard
-              icon={Target}
-              label="Max points per round"
-              value={5000}
-            />
-          </Reveal>
-          <Reveal delay={180}>
-            <StatCard
-              icon={Timer}
-              label="Seconds per round"
-              value={60}
-              suffix="s"
-            />
-          </Reveal>
-          <Reveal delay={270}>
-            <StatCard
-              icon={Building2}
-              label="Neighborhoods"
-              value={8}
-              display="8+"
-            />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ─────────────────────── Final CTA ─────────────────────── */}
-      <section className="container pb-24">
-        <Reveal>
-          <div className="surface-card relative overflow-hidden rounded-3xl px-6 py-14 text-center sm:px-12 sm:py-20">
-            <div
-              className="absolute inset-0 -z-10 bg-grid-fade"
-              aria-hidden="true"
-            />
-            <div
-              className="absolute inset-x-0 bottom-0 -z-10 text-primary/10 dark:text-white/6"
-              aria-hidden="true"
-            >
-              <Skyline className="h-32 sm:h-44" />
-            </div>
-
-            <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-              Ready to test your local knowledge?
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
-              Jump into a fresh five-round game. No account, no setup, just you
-              and the streets of Toronto.
+      {stats && stats.gamesFinished > 0 && (
+        <section className="container pt-16 sm:pt-20">
+          <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-border pb-3">
+            <h2 className="text-base font-semibold">How people score</h2>
+            <p className="text-sm text-muted-foreground">
+              across {formatCount(stats.gamesFinished)} finished runs
             </p>
-            <div className="mt-8 flex justify-center">
-              <Button asChild size="xl" className="rounded-2xl shadow-glow">
-                <Link href="/game">
-                  <Play className="size-5" />
-                  Play TorontoGuessr
-                </Link>
-              </Button>
-            </div>
           </div>
-        </Reveal>
+
+          <ul className="mt-5 space-y-3">
+            {stats.scoreBands.map((band) => (
+              <li key={band.label} className="flex items-center gap-4">
+                <span className="w-28 shrink-0 text-sm text-muted-foreground sm:w-36">
+                  {band.label}
+                </span>
+                {/* The bar needs its own track to measure against. Sized as a
+                    percentage of the row instead, the widest band resolves to
+                    100% of a box that still has the label and the figure beside
+                    it, so it overflowed and pushed the figure off the edge. */}
+                <span
+                  className="h-2.5 flex-1 overflow-hidden rounded-full bg-accent"
+                  aria-hidden="true"
+                >
+                  <span
+                    className="block h-full rounded-full bg-primary"
+                    style={{
+                      width: `${Math.max((band.count / widestBand) * 100, 1.5)}%`,
+                    }}
+                  />
+                </span>
+                <span className="w-14 shrink-0 text-right font-mono-accent text-sm tabular-nums text-muted-foreground">
+                  {band.percent}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {stats && stats.perfectPlayers.length > 0 && (
+        <section className="container pt-16 sm:pt-20">
+          <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-border pb-3">
+            <h2 className="text-base font-semibold">
+              Players who have gone perfect
+            </h2>
+            <Link
+              href="/leaderboard"
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Full leaderboard
+            </Link>
+          </div>
+
+          {/* A list of names rather than a ranking, because a perfect run is
+              25,000 exactly and hundreds of people share it: ranking them would
+              be ordering ties arbitrarily. The tie is the interesting part. */}
+          <ul className="mt-5 flex flex-wrap gap-2">
+            {stats.perfectPlayers.slice(0, 24).map((name) => (
+              <li
+                key={name}
+                className="rounded-lg border border-border bg-card px-3 py-1.5 font-mono-accent text-sm"
+              >
+                {name}
+              </li>
+            ))}
+          </ul>
+
+          {stats.perfectPlayers.length > 24 && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              and {formatCount(stats.perfectPlayers.length - 24)} more who
+              picked a name. Guests are not listed: a guest name is generated
+              fresh each game, so it belongs to nobody.
+            </p>
+          )}
+        </section>
+      )}
+
+      <section className="container py-16 sm:py-20">
+        <div className="max-w-2xl border-l-2 border-toronto-red pl-5">
+          <p className="text-pretty leading-relaxed">
+            I built this to find out whether I could actually recognise my own
+            city block by block. Turns out: sometimes. Every location in the
+            pool is one I checked myself, because the automatically generated
+            ones kept landing in ravines and parking garages.
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Made in Toronto.{" "}
+            <a
+              href="https://github.com/YheChen"
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Source on GitHub
+            </a>
+          </p>
+        </div>
       </section>
     </>
   );
