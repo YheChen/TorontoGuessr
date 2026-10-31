@@ -85,3 +85,16 @@ export function formatDay(value: string): string {
   }
   return `${monthLabel} ${Number(day)}`;
 }
+
+/**
+ * Short month name for a "YYYY-MM-DD" key, with the year appended on request
+ * ("Jan 2027"). Avoids Date for the same reason formatDay does.
+ */
+export function formatMonth(value: string, withYear = false): string {
+  const [year, month] = value.split("-");
+  const monthLabel = MONTHS[Number(month) - 1];
+  if (!monthLabel) {
+    return value;
+  }
+  return withYear ? `${monthLabel} ${year}` : monthLabel;
+}

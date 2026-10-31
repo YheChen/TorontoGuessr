@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "@/lib/api-base-url";
 import { getSession, refreshSession } from "@/lib/auth-client";
 import { getClientId } from "@/lib/daily-attempt";
 
@@ -23,18 +24,13 @@ import type {
   UpdateLocationReviewResponse,
 } from "@/lib/types";
 
-const rawApiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  (process.env.NODE_ENV === "development" ? "http://localhost:3001/api" : undefined);
-
 function getApiBaseUrl() {
-  if (!rawApiBaseUrl) {
+  const baseUrl = resolveApiBaseUrl();
+  if (!baseUrl) {
     throw new Error("NEXT_PUBLIC_API_BASE_URL is required outside development.");
   }
 
-  return rawApiBaseUrl.endsWith("/")
-    ? rawApiBaseUrl.slice(0, -1)
-    : rawApiBaseUrl;
+  return baseUrl;
 }
 
 async function send(

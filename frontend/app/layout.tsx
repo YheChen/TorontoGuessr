@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s · TorontoGuessr",
   },
   description:
-    "A premium street-guessing game for Toronto. Drop into Street View, read the city, and pin your guess across five rounds. Climb the leaderboard.",
+    "A Street View guessing game for Toronto. Read the street signs, storefronts and skyline, then pin where you think you are. Five rounds, a daily challenge, and rooms to play with friends.",
   keywords: [
     "Toronto",
     "GeoGuessr",
