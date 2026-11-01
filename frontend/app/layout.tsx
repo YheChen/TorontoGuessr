@@ -88,6 +88,11 @@ export default function RootLayout({
           href="https://streetviewpixels-pa.googleapis.com"
         />
         <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1882742970007273"
+          crossOrigin="anonymous"
+        ></script>
+        <script
           defer
           src="https://cloud.umami.is/script.js"
           data-website-id="aabe665b-45c4-4c8e-98fb-e0d6265a3509"
