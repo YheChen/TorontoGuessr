@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/site/brand-mark";
 import { AccountMenu } from "@/components/site/account-menu";
+import { PlayButton } from "@/components/site/play-button";
 
 const NAV_LINKS = [
   { href: "/lobby", label: "Multiplayer", icon: Users },
@@ -94,16 +95,14 @@ export function Navbar() {
               already-signed-in player never sees "Sign in" flash first. */}
           <AccountMenu />
 
-          <Button
-            asChild
+          <PlayButton
+            href="/game"
             size="sm"
             className="hidden rounded-full px-5 shadow-glow sm:inline-flex"
           >
-            <Link href="/game">
-              <Play className="size-4" />
-              Play
-            </Link>
-          </Button>
+            <Play className="size-4" />
+            Play
+          </PlayButton>
 
           {/* Mobile menu trigger */}
           <Button
@@ -143,12 +142,10 @@ export function Navbar() {
                   </Link>
                 );
               })}
-              <Button asChild className="mt-1 w-full rounded-xl">
-                <Link href="/game">
-                  <Play className="size-4" />
-                  Play now
-                </Link>
-              </Button>
+              <PlayButton href="/game" className="mt-1 w-full rounded-xl">
+                <Play className="size-4" />
+                Play now
+              </PlayButton>
             </nav>
           </div>
         </div>

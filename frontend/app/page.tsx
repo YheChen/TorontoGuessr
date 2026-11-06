@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { ArrowRight, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { StreakBadge } from "@/components/streak-badge";
 import { ActivityChart } from "@/components/site/activity-chart";
+import { PlayButton } from "@/components/site/play-button";
+import { PlayPausedNotice } from "@/components/site/play-paused";
 import { resolveApiBaseUrl } from "@/lib/api-base-url";
 import { formatDay } from "@/lib/date-toronto";
 import { loadHomeStats, type HomeStats } from "@/lib/home-stats";
+import { PLAY_PAUSED } from "@/lib/play-status";
 
 // Rebuilt at most every five minutes, so the numbers stay current without a
 // stats request per visitor. Next only reads a literal here; keep it equal to
@@ -78,6 +80,7 @@ export default async function Home() {
       <section className="container pt-12 sm:pt-16 lg:pt-20">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-end lg:gap-16">
           <div>
+            {PLAY_PAUSED && <PlayPausedNotice className="mb-8 max-w-xl" />}
             <h1 className="max-w-3xl text-balance text-5xl font-bold leading-[1.02] tracking-tight sm:text-6xl xl:text-7xl">
               How well do you know Toronto?
             </h1>
@@ -93,29 +96,36 @@ export default async function Home() {
                 min-content, and non-wrapping buttons once pushed this column
                 wide enough to scroll the page sideways. */}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <Button asChild size="xl" className="rounded-xl">
-                <Link href="/game">
-                  <Play className="size-5" />
-                  Play now
-                </Link>
-              </Button>
-              <Button asChild size="xl" variant="outline" className="rounded-xl">
-                <Link href="/game?mode=daily">Today&apos;s daily challenge</Link>
-              </Button>
+              <PlayButton href="/game" size="xl" className="rounded-xl">
+                <Play className="size-5" />
+                Play now
+              </PlayButton>
+              <PlayButton
+                href="/game?mode=daily"
+                size="xl"
+                variant="outline"
+                className="rounded-xl"
+              >
+                Today&apos;s daily challenge
+              </PlayButton>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-              <p>
-                Free, and no account needed. Or{" "}
-                <Link href="/lobby" className={linkClass}>
-                  play with friends
-                </Link>{" "}
-                in a private room.
-              </p>
-              {/* Client island: the streak lives in localStorage. Renders
-                  nothing without a live streak. */}
-              <StreakBadge />
-            </div>
+            {/* Hidden while paused: the invitation to play with friends and a
+                streak to keep alive would both point at buttons that are off. */}
+            {!PLAY_PAUSED && (
+              <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                <p>
+                  Free, and no account needed. Or{" "}
+                  <Link href="/lobby" className={linkClass}>
+                    play with friends
+                  </Link>{" "}
+                  in a private room.
+                </p>
+                {/* Client island: the streak lives in localStorage. Renders
+                    nothing without a live streak. */}
+                <StreakBadge />
+              </div>
+            )}
           </div>
 
           {stats && <HeroNumbers stats={stats} />}
@@ -179,21 +189,7 @@ export default async function Home() {
         <ul className="mt-8 divide-y divide-border border-y border-border">
           {MODES.map((mode) => (
             <li key={mode.title}>
-              <Link
-                href={mode.href}
-                className="group grid gap-x-8 gap-y-1.5 py-6 sm:grid-cols-[13rem_minmax(0,1fr)_auto] sm:items-baseline"
-              >
-                <span className="text-lg font-semibold transition-colors group-hover:text-primary">
-                  {mode.title}
-                </span>
-                <span className="text-pretty text-muted-foreground">
-                  {mode.description}
-                </span>
-                <span className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-primary sm:mt-0">
-                  {mode.action}
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-                </span>
-              </Link>
+              <ModeRow mode={mode} />
             </li>
           ))}
         </ul>
@@ -210,6 +206,41 @@ export default async function Home() {
         </p>
       </section>
     </>
+  );
+}
+
+const modeRowClass =
+  "grid gap-x-8 gap-y-1.5 py-6 sm:grid-cols-[13rem_minmax(0,1fr)_auto] sm:items-baseline";
+
+/** One way to play: a link into it, or a plain row marked paused. */
+function ModeRow({ mode }: { mode: (typeof MODES)[number] }) {
+  if (PLAY_PAUSED) {
+    return (
+      <div className={modeRowClass}>
+        <span className="text-lg font-semibold">{mode.title}</span>
+        <span className="text-pretty text-muted-foreground">
+          {mode.description}
+        </span>
+        <span className="mt-1.5 text-sm font-medium text-muted-foreground sm:mt-0">
+          Paused
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <Link href={mode.href} className={`group ${modeRowClass}`}>
+      <span className="text-lg font-semibold transition-colors group-hover:text-primary">
+        {mode.title}
+      </span>
+      <span className="text-pretty text-muted-foreground">
+        {mode.description}
+      </span>
+      <span className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-primary sm:mt-0">
+        {mode.action}
+        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
   );
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import {
   CalendarDays,
   Flame,
@@ -11,6 +10,7 @@ import {
   UserIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlayButton } from "@/components/site/play-button";
 import { StatCard } from "@/components/site/stat-card";
 import { EmptyState, ErrorCard, LoadingScreen } from "@/components/site/states";
 import { fetchGameHistory, fetchProfile, importStreakBest } from "@/lib/api";
@@ -112,9 +112,9 @@ export function AccountClient() {
           title="Accounts are not enabled"
           description="This deployment is not wired for accounts, so there is nothing to show here."
           action={
-            <Button asChild className="rounded-xl">
-              <Link href="/game">Play a game</Link>
-            </Button>
+            <PlayButton href="/game" className="rounded-xl">
+              Play a game
+            </PlayButton>
           }
         />
       </section>
@@ -129,9 +129,9 @@ export function AccountClient() {
           title="You are not signed in"
           description="Finish a game and save your progress, or use Sign in on the navbar if you already have an account."
           action={
-            <Button asChild className="rounded-xl">
-              <Link href="/game">Play a game</Link>
-            </Button>
+            <PlayButton href="/game" className="rounded-xl">
+              Play a game
+            </PlayButton>
           }
         />
       </section>
@@ -216,9 +216,9 @@ export function AccountClient() {
                 title="No games filed yet"
                 description="Finish a game while signed in and it will appear here."
                 action={
-                  <Button asChild className="rounded-xl">
-                    <Link href="/game">Play a game</Link>
-                  </Button>
+                  <PlayButton href="/game" className="rounded-xl">
+                    Play a game
+                  </PlayButton>
                 }
               />
             ) : (
