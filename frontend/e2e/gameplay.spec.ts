@@ -30,6 +30,25 @@ async function navBottom(page: Page): Promise<number> {
 }
 
 /**
+ * Whether this deployment has play switched off (lib/play-status.ts).
+ *
+ * While it is, /game and /lobby show the paused notice instead of a game, so
+ * the gameplay tests have nothing to play. They skip with that reason, the way
+ * the sign-in test skips when accounts are not configured: pausing is a
+ * deployment choice, not a regression. Every layout check still runs.
+ */
+async function playIsPaused(page: Page): Promise<boolean> {
+  return (await page.getByTestId("play-paused").count()) > 0;
+}
+
+async function skipIfPlayPaused(page: Page): Promise<void> {
+  test.skip(
+    await playIsPaused(page),
+    "Play is paused on this deployment (lib/play-status.ts), so there is no game to play."
+  );
+}
+
+/**
  * Horizontal overflow of the document, in pixels, measured once the page has
  * stopped changing size.
  *
@@ -86,7 +105,13 @@ const SWEEP_PATHS = ["/", "/leaderboard", "/about", "/stats", "/lobby"] as const
 
 test("the landing page renders its hero", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: /play/i }).first()).toBeVisible();
+  if (await playIsPaused(page)) {
+    // The way in is still there, switched off, with the reason beside it.
+    await expect(page.getByTestId("play-paused")).toBeVisible();
+    await expect(page.getByRole("button", { name: /play now/i }).first()).toBeDisabled();
+  } else {
+    await expect(page.getByRole("link", { name: /play/i }).first()).toBeVisible();
+  }
   expect(await pageOverflow(page), "horizontal page overflow").toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
 });
 
@@ -190,6 +215,7 @@ test.describe("a round of play", () => {
     });
 
     await page.goto("/game");
+    await skipIfPlayPaused(page);
 
     const panorama = page.getByTestId("game-panorama");
     const map = page.getByTestId("game-map");
@@ -306,6 +332,7 @@ test.describe("a round of play", () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/game");
+    await skipIfPlayPaused(page);
     await expect(page.getByTestId("game-panorama")).toBeVisible();
 
     expect(

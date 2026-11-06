@@ -10,6 +10,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlayButton } from "@/components/site/play-button";
 import { Badge } from "@/components/ui/badge";
 import { Reveal } from "@/components/site/reveal";
 import { SectionHeading } from "@/components/site/section-heading";
@@ -88,12 +89,10 @@ export default function About() {
           description="A street-guessing game built around real Toronto Street View imagery. Read the city, drop your pin, and find out how well you really know the 6ix."
         />
         <div className="mt-7 flex flex-wrap gap-3">
-          <Button asChild size="lg" className="rounded-xl shadow-glow">
-            <Link href="/game">
-              <Play className="size-4" />
-              Start playing
-            </Link>
-          </Button>
+          <PlayButton href="/game" size="lg" className="rounded-xl shadow-glow">
+            <Play className="size-4" />
+            Start playing
+          </PlayButton>
           <Button asChild size="lg" variant="outline" className="rounded-xl">
             <Link href="/leaderboard">
               <Trophy className="size-4" />

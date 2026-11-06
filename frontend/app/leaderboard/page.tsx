@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Trophy, Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlayButton } from "@/components/site/play-button";
 import {
   Pagination,
   PaginationContent,
@@ -216,12 +217,10 @@ export default function Leaderboard() {
               : activeOption.description}
           </p>
         </div>
-        <Button asChild size="lg" className="rounded-xl shadow-glow">
-          <Link href="/game">
-            <Play className="size-4" />
-            Play & compete
-          </Link>
-        </Button>
+        <PlayButton href="/game" size="lg" className="rounded-xl shadow-glow">
+          <Play className="size-4" />
+          Play & compete
+        </PlayButton>
       </div>
 
       {/* Board + period controls + summary */}

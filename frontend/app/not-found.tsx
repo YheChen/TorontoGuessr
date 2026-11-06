@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Home, Play, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PlayButton } from "@/components/site/play-button";
 
 export default function NotFound() {
   return (
@@ -31,12 +32,10 @@ export default function NotFound() {
             Back home
           </Link>
         </Button>
-        <Button asChild size="lg" variant="outline" className="rounded-xl">
-          <Link href="/game">
-            <Play className="size-4" />
-            Play a game
-          </Link>
-        </Button>
+        <PlayButton href="/game" size="lg" variant="outline" className="rounded-xl">
+          <Play className="size-4" />
+          Play a game
+        </PlayButton>
       </div>
     </section>
   );

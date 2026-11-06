@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   BarChart3,
   CalendarDays,
@@ -16,7 +15,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Button } from "@/components/ui/button";
+import { PlayButton } from "@/components/site/play-button";
 import { StatCard } from "@/components/site/stat-card";
 import { LoadingScreen, ErrorCard, EmptyState } from "@/components/site/states";
 import { cn } from "@/lib/utils";
@@ -333,12 +332,10 @@ export function StatsClient() {
                   title="No games in this range yet"
                   description="Start a game and it will show up here within moments."
                   action={
-                    <Button asChild className="mt-1 rounded-xl">
-                      <Link href="/game">
-                        <Play className="size-4" />
-                        Play now
-                      </Link>
-                    </Button>
+                    <PlayButton href="/game" className="mt-1 rounded-xl">
+                      <Play className="size-4" />
+                      Play now
+                    </PlayButton>
                   }
                   className="mt-6"
                 />

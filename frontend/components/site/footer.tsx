@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ExternalLink, MapPin } from "lucide-react";
 import { BrandMark } from "@/components/site/brand-mark";
 import { FooterBackdrop } from "@/components/site/footer-backdrop";
+import { PLAY_PAUSED } from "@/lib/play-status";
 
 const FOOTER_LINKS: Array<{
   title: string;
@@ -10,7 +11,8 @@ const FOOTER_LINKS: Array<{
   {
     title: "Game",
     links: [
-      { label: "Play", href: "/game" },
+      // Hidden while play is paused, when it would only lead to the notice.
+      ...(PLAY_PAUSED ? [] : [{ label: "Play", href: "/game" }]),
       { label: "Leaderboard", href: "/leaderboard" },
       { label: "Stats", href: "/stats" },
       { label: "About", href: "/about" },
