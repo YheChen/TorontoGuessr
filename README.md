@@ -1,6 +1,6 @@
 # TorontoGuessr
 
-A Toronto Street View location-guessing game with **3,800+ games played** by real
+A Toronto Street View location-guessing game with **8,000+ games played** by real
 players. Live at **[www.torontoguessr.ca](https://www.torontoguessr.ca)**.
 
 **[Play now](https://www.torontoguessr.ca)** ·
